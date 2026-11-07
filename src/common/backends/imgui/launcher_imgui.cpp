@@ -88,6 +88,20 @@ static const char* ui_text(const char* en) {
     return launcher_i18n_text(en);
 }
 
+/* Texto já traduzido para quem desenha direto no ImDrawList (AddText não passa
+ * pelo hook de tradução do ImGui). Devolve a própria string se não houver
+ * tradução. O ponteiro é válido até o próximo desenho de texto. */
+static const char* ui_display(const char* s) {
+#ifdef IMGUI_HAS_TEXT_TRANSLATE_HOOK
+    if (s && GImGuiTextTranslate) {
+        const char* ob = nullptr;
+        const char* oe = nullptr;
+        if (GImGuiTextTranslate(s, s + std::strlen(s), &ob, &oe) && ob) return ob;
+    }
+#endif
+    return s;
+}
+
 struct ShaderPresetEntry {
     std::string label;
     std::string path;
@@ -812,7 +826,7 @@ bool neon_cta(const char* id, const char* label, ImVec2 size, bool enabled = tru
     ImU32 fg = imcol(th.accent_text);
     dl->AddTriangleFilled(ImVec2(cx, cy - tri*0.55f), ImVec2(cx, cy + tri*0.55f),
                           ImVec2(cx + tri, cy), fg);
-    dl->AddText(ImVec2(cx + tri + gap, cy - th_h*0.5f), fg, label);
+    dl->AddText(ImVec2(cx + tri + gap, cy - th_h*0.5f), fg, ui_display(label));
     if (!enabled) ImGui::EndDisabled();
     return clk && enabled;
 }
@@ -831,9 +845,16 @@ void eyebrow_tracked(const char* s) {
     // letter-spaced text
     float x = p.x + px(10.0f);
     ImU32 c = imcol(th.accent2);
-    char buf[2] = {0,0};
-    for (const char* q = s; *q; ++q) {
-        buf[0] = *q;
+    char buf[8] = {0};
+    s = ui_display(s);
+    for (const char* q = s; *q; ) {
+        /* um caractere UTF-8 por vez (acentos ocupam 2+ bytes) */
+        const unsigned char lead = (unsigned char)*q;
+        int n = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2 : (lead >> 4) == 0xE ? 3 : (lead >> 3) == 0x1E ? 4 : 1;
+        int k = 0;
+        while (k < n && q[k]) { buf[k] = q[k]; ++k; }
+        buf[k] = 0;
+        q += k;
         dl->AddText(ImVec2(x, p.y), c, buf);
         x += ImGui::CalcTextSize(buf).x + px(2.2f);
     }
@@ -1129,7 +1150,13 @@ void draw_verdict_block(LauncherModel* m, const LauncherTheme& th, float availw)
     // Checklist: Serial / Region / ISO header. Before a disc is chosen, show
     // em-dashes with no pass/fail marks so the layout still reserves the rows.
     if (ImGui::BeginTable("verdict_checklist", 3, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthFixed, px(76));
+        // Label column fits the longest (translated) label, 76 px minimum.
+        float kcol = px(76);
+        for (const char* k : {"Serial", "Region", "ISO header", "TOC"}) {
+            const float kw = ImGui::CalcTextSize(ui_text(k)).x + px(10);
+            if (kw > kcol) kcol = kw;
+        }
+        ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthFixed, kcol);
         ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("m", ImGuiTableColumnFlags_WidthFixed, px(28));
         const char* dash = "\xE2\x80\x94";
@@ -3655,6 +3682,43 @@ void draw_assist_tools(LauncherModel* m, const LauncherTheme& th) {
         ImGui::Dummy(ImVec2(0, px(8)));
         draw_assist_binding_editor(m, th, "assist_binds", 0, true);
     }
+    end_panel();
+}
+
+// Página "Idioma" do launcher (aberta pelo botão Language no topo). Fica fora
+// do LngView do modelo: é só uma escolha de interface, salva pelo próprio
+// launcher_i18n em launcher_language.txt.
+static bool g_show_language_page = false;
+
+static bool ui_language_is_pt() {
+    const char* cur = launcher_i18n_language();
+    return cur && (std::strcmp(cur, "pt-BR") == 0 || std::strcmp(cur, "pt") == 0 ||
+                   std::strcmp(cur, "pt_BR") == 0);
+}
+
+void draw_launcher_language(LauncherModel* m, const LauncherTheme& th) {
+    (void)m;
+    if (!begin_panel("launcher_language_page", 0, false)) {
+        end_panel();
+        return;
+    }
+    eyebrow("LAUNCHER LANGUAGE");
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::PushTextWrapPos();
+    ImGui::TextWrapped("%s", "Choose the language of the launcher menus. The game itself is not affected.");
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, px(12)));
+    const bool pt = ui_language_is_pt();
+    if (ImGui::RadioButton("English##ui_lang_en", !pt) && pt)
+        launcher_i18n_set_language("en", 1);
+    ImGui::Dummy(ImVec2(0, px(6)));
+    if (ImGui::RadioButton("Portugu\xC3\xAAs (Brasil)##ui_lang_pt", pt) && !pt)
+        launcher_i18n_set_language("pt-BR", 1);
+    ImGui::Dummy(ImVec2(0, px(12)));
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::TextUnformatted("The choice is saved and applies immediately.");
+    ImGui::PopStyleColor();
     end_panel();
 }
 
@@ -6900,7 +6964,7 @@ static void draw_mod_packages(LauncherModel* m, const LauncherTheme& th) {
     }
     ImGui::SameLine();
     ImGui::SetNextItemWidth(px(300));
-    ImGui::InputTextWithHint("##mod_search", "Search mods and options...",
+    ImGui::InputTextWithHint("##mod_search", ui_display("Search mods and options..."),
                              m->mod_search, sizeof(m->mod_search));
     if (m->mod_status[0]) {
         ImGui::SameLine();
@@ -7388,7 +7452,7 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
         ImGui::SetTooltip("%s", ui_text("Disable every installed mod feature"));
     ImGui::SameLine();
     ImGui::SetNextItemWidth(px(300));
-    ImGui::InputTextWithHint("##mod_search", ui_text("Search features, groups, packages..."),
+    ImGui::InputTextWithHint("##mod_search", ui_display("Search features, groups, packages..."),
                              m->mod_search, sizeof(m->mod_search));
     if (m->mod_status[0]) {
         ImGui::PushStyleColor(ImGuiCol_Text, col(th.warn));
@@ -7783,7 +7847,7 @@ void panel_identity_draw(LauncherModel* m, const LauncherTheme* th) {
     const float cw = ImGui::GetContentRegionAvail().x;
     ImGui::TextUnformatted(ui_text("Player name"));
     ImGui::SetNextItemWidth(cw);
-    ImGui::InputTextWithHint("##identity_name", ui_text("console default"),
+    ImGui::InputTextWithHint("##identity_name", ui_display("console default"),
                              m->s.player_name, sizeof(m->s.player_name));
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip(
@@ -9161,29 +9225,37 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
         const float resume_y = ImGui::GetCursorPosY();
         const float right = ImGui::GetWindowContentRegionMax().x;
         const float y = hdr_top + px(6.0f);
-        if (m->view == LNG_VIEW_DASHBOARD) {
-            const int count = 1 + (m->mods ? 1 : 0) +
-                              (m->has_assist_tools ? 1 : 0) +
-                              ((m->credits_text && m->credits_text[0]) ? 1 : 0);
-            const float w = px(110.0f);
-            const float total = w * count + gap * (count - 1);
+        if (m->view == LNG_VIEW_DASHBOARD && !g_show_language_page) {
+            // Largura de cada botão pelo texto (traduções são mais longas
+            // que o inglês), com 110 px como mínimo.
+            struct NavBtn { const char* label; int action; };
+            NavBtn btns[5];
+            int count = 0;
+            btns[count++] = {"Settings", 0};
+            if (m->mods) btns[count++] = {"Mods", 1};
+            if (m->has_assist_tools) btns[count++] = {"Assist Tools", 2};
+            if (m->credits_text && m->credits_text[0]) btns[count++] = {"Credits", 3};
+            btns[count++] = {"Language##ui_lang_page", 4};
+            float ws[5];
+            float total = 0.0f;
+            const float pad = ImGui::GetStyle().FramePadding.x * 2.0f + px(16.0f);
+            for (int i = 0; i < count; ++i) {
+                ws[i] = ImGui::CalcTextSize(btns[i].label, nullptr, true).x + pad;
+                if (ws[i] < px(110.0f)) ws[i] = px(110.0f);
+                total += ws[i] + (i ? gap : 0.0f);
+            }
             ImGui::SetCursorPos(ImVec2(right - total, y));
-            if (ImGui::Button(ui_text("Settings"), ImVec2(w, px(34))))
-                launcher_model_set_view(m, LNG_VIEW_SETTINGS);
-            if (m->mods) {
-                ImGui::SameLine(0, gap);
-                if (ImGui::Button(ui_text("Mods"), ImVec2(w, px(34))))
-                    launcher_model_set_view(m, LNG_VIEW_MODS);
-            }
-            if (m->has_assist_tools) {
-                ImGui::SameLine(0, gap);
-                if (ImGui::Button(ui_text("Assist Tools"), ImVec2(w, px(34))))
-                    launcher_model_set_view(m, LNG_VIEW_ASSIST_TOOLS);
-            }
-            if (m->credits_text && m->credits_text[0]) {
-                ImGui::SameLine(0, gap);
-                if (ImGui::Button(ui_text("Credits"), ImVec2(w, px(34))))
-                    launcher_model_set_view(m, LNG_VIEW_CREDITS);
+            for (int i = 0; i < count; ++i) {
+                if (i) ImGui::SameLine(0, gap);
+                if (ImGui::Button(btns[i].label, ImVec2(ws[i], px(34)))) {
+                    switch (btns[i].action) {
+                        case 0: launcher_model_set_view(m, LNG_VIEW_SETTINGS); break;
+                        case 1: launcher_model_set_view(m, LNG_VIEW_MODS); break;
+                        case 2: launcher_model_set_view(m, LNG_VIEW_ASSIST_TOOLS); break;
+                        case 3: launcher_model_set_view(m, LNG_VIEW_CREDITS); break;
+                        default: g_show_language_page = true; break;
+                    }
+                }
             }
         } else {
             const float w = px(110.0f);
@@ -9200,8 +9272,10 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
                 }
             }
             ImGui::SetCursorPos(ImVec2(right - w, y));
-            if (ImGui::Button(ui_text("< Back"), ImVec2(w, px(34))))
+            if (ImGui::Button(ui_text("< Back"), ImVec2(w, px(34)))) {
+                g_show_language_page = false;
                 launcher_model_set_view(m, LNG_VIEW_DASHBOARD);
+            }
         }
         // Absolute placement prevents three dashboard buttons from mutating
         // the title group's line state and wrapping Settings into the body.
@@ -9227,7 +9301,10 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
     float body_h = ImGui::GetContentRegionAvail().y - footer_h;
     if (body_h < px(80.0f)) body_h = px(80.0f);
     begin_container("body", ImVec2(0, body_h));
-    switch (m->view) {
+    if (g_show_language_page && m->view != LNG_VIEW_DASHBOARD)
+        g_show_language_page = false;   // another page took over
+    if (g_show_language_page) draw_launcher_language(m, th);
+    else switch (m->view) {
         case LNG_VIEW_DASHBOARD:  draw_dashboard(m, th, logical_w); break;
         case LNG_VIEW_SETTINGS:   draw_settings(m, th);             break;
         case LNG_VIEW_CONTROLLER: draw_controller(m, th);           break;

@@ -736,6 +736,14 @@ bool ImGui::ButtonEx(const char* label, const ImVec2& size_arg, ImGuiButtonFlags
     if ((flags & ImGuiButtonFlags_AlignTextBaseLine) && style.FramePadding.y < window->DC.CurrLineTextBaseOffset) // Try to vertically align buttons that are smaller/have no padding so that text baseline matches (bit hacky, since it shouldn't be a flag)
         pos.y += window->DC.CurrLineTextBaseOffset - style.FramePadding.y;
     ImVec2 size = CalcItemSize(size_arg, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f);
+    // [recomp-ui local patch] never clip the label: a fixed-width button whose
+    // (possibly translated) text does not fit grows to fit it.
+    if (size_arg.x > 0.0f && label_size.x > 0.0f)
+    {
+        const float need = label_size.x + style.FramePadding.x * 2.0f + 8.0f;
+        if (size.x < need)
+            size.x = need;
+    }
 
     const ImRect bb(pos, pos + size);
     ItemSize(size, style.FramePadding.y);
