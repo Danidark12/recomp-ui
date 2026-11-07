@@ -3590,6 +3590,22 @@ const char* ImGui::FindRenderedTextEnd(const char* text, const char* text_end)
     return text_display_end;
 }
 
+// [recomp-ui local patch] see GImGuiTextTranslate in imgui.h
+ImGuiTextTranslateFn GImGuiTextTranslate = NULL;
+static inline void ImTranslateDisplayText(const char*& text, const char*& text_end)
+{
+    if (!GImGuiTextTranslate || !text)
+        return;
+    const char* e = text_end ? text_end : text + ImStrlen(text);
+    const char* ob = NULL;
+    const char* oe = NULL;
+    if (GImGuiTextTranslate(text, e, &ob, &oe) && ob && oe)
+    {
+        text = ob;
+        text_end = oe;
+    }
+}
+
 // Internal ImGui functions to render text
 // RenderText***() functions calls ImDrawList::AddText() calls ImBitmapFont::RenderText()
 void ImGui::RenderText(ImVec2 pos, const char* text, const char* text_end, bool hide_text_after_hash)
@@ -3609,6 +3625,7 @@ void ImGui::RenderText(ImVec2 pos, const char* text, const char* text_end, bool 
             text_end = text + ImStrlen(text); // FIXME-OPT
         text_display_end = text_end;
     }
+    ImTranslateDisplayText(text, text_display_end);
 
     if (text != text_display_end)
     {
@@ -3625,6 +3642,7 @@ void ImGui::RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end
 
     if (!text_end)
         text_end = text + ImStrlen(text); // FIXME-OPT
+    ImTranslateDisplayText(text, text_end);
 
     if (text != text_end)
     {
@@ -3641,6 +3659,7 @@ void ImGui::RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end
 // better advantage of the render function taking size into account for coarse clipping.
 void ImGui::RenderTextClippedEx(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_display_end, const ImVec2* text_size_if_known, const ImVec2& align, const ImRect* clip_rect)
 {
+    ImTranslateDisplayText(text, text_display_end);
     // Perform CPU side clipping for single clipped element to avoid using scissor state
     ImVec2 pos = pos_min;
     const ImVec2 text_size = text_size_if_known ? *text_size_if_known : CalcTextSize(text, text_display_end, false, 0.0f);
@@ -3690,6 +3709,7 @@ void ImGui::RenderTextEllipsis(ImDrawList* draw_list, const ImVec2& pos_min, con
     ImGuiContext& g = *GImGui;
     if (text_end_full == NULL)
         text_end_full = FindRenderedTextEnd(text);
+    ImTranslateDisplayText(text, text_end_full);
     const ImVec2 text_size = text_size_if_known ? *text_size_if_known : CalcTextSize(text, text_end_full, false, 0.0f);
 
     //draw_list->AddLine(ImVec2(pos_max.x, pos_min.y - 4), ImVec2(pos_max.x, pos_max.y + 4), IM_COL32(0, 0, 255, 255));
@@ -5795,6 +5815,7 @@ ImVec2 ImGui::CalcTextSize(const char* text, const char* text_end, bool hide_tex
         text_display_end = FindRenderedTextEnd(text, text_end);      // Hide anything after a '##' string
     else
         text_display_end = text_end;
+    ImTranslateDisplayText(text, text_display_end);
 
     ImFont* font = g.Font;
     const float font_size = g.FontSize;
@@ -11408,7 +11429,11 @@ void ImGui::SetTooltipV(const char* fmt, va_list args)
 {
     if (!BeginTooltipEx(ImGuiTooltipFlags_OverridePrevious, ImGuiWindowFlags_None))
         return;
+    // [recomp-ui local patch] wrap long tooltips instead of running off-screen
+    // (translated text is often longer than the English it replaces).
+    PushTextWrapPos(GetFontSize() * 34.0f);
     TextV(fmt, args);
+    PopTextWrapPos();
     EndTooltip();
 }
 

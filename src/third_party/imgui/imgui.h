@@ -3757,6 +3757,14 @@ namespace ImGui
 #pragma warning (pop)
 #endif
 
+// [recomp-ui local patch] Display-time text translation hook. When set, every
+// string ImGui measures or draws (CalcTextSize / RenderText*) is passed through it;
+// return true and set out_begin/out_end to substitute the visible text. IDs are
+// unaffected because they are hashed from the original label.
+#define IMGUI_HAS_TEXT_TRANSLATE_HOOK 1
+typedef bool (*ImGuiTextTranslateFn)(const char* text_begin, const char* text_end, const char** out_begin, const char** out_end);
+extern IMGUI_API ImGuiTextTranslateFn GImGuiTextTranslate;
+
 // Include imgui_user.h at the end of imgui.h
 // May be convenient for some users to only explicitly include vanilla imgui.h and have extra stuff included.
 #ifdef IMGUI_INCLUDE_IMGUI_USER_H
