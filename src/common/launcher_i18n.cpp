@@ -341,6 +341,8 @@ static const LauncherI18nEntry kPortugueseBR[] = {
      "Clique num bot\xC3\xA3""o abaixo e aperte a tecla, ou o bot\xC3\xA3""o ou combina\xC3\xA7""\xC3\xA3""o do controle que quiser. Esc cancela."},
     {"Scenes played with the game characters cannot be skipped in Valkyrie Profile: turn on the fast-forward toggle at the start of the scene and turn it off at the end (raise the speed above for quicker scenes). Animated videos (FMV) can be skipped automatically with the option below.",
      "As cenas feitas com os personagens do jogo n\xC3\xA3""o podem ser puladas no Valkyrie Profile: ligue o avan\xC3\xA7""o r\xC3\xA1""pido (liga/desliga) no come\xC3\xA7""o da cena e desligue no fim (aumente a velocidade acima para cenas mais r\xC3\xA1""pidas). Os v\xC3\xAD""deos animados (FMV) podem ser pulados automaticamente com a op\xC3\xA7""\xC3\xA3""o abaixo."},
+    {"Analog stick",
+     "Anal\xC3\xB3""gico"},
     {"LAUNCHER LANGUAGE",
      "IDIOMA DO LAUNCHER"},
     {"Choose the language of the launcher menus. The game itself is not affected.",

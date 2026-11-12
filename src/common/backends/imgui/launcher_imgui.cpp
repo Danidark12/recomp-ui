@@ -5898,33 +5898,93 @@ void draw_launcher_cheats(LauncherModel* m, const LauncherTheme& th) {
 // avanço rápido e a opção de pular FMVs. Valores do modelo -> settings.toml.
 static bool g_show_shortcuts_page = false;
 
-static void shortcut_row(const LauncherTheme& th, const char* title,
-                         const char* keys, const char* text) {
+// Nome PlayStation de um botão do controle (índice do gamepad padrão SDL).
+static const char* shortcut_pad_button_name(int code) {
+    switch (code) {
+    case 0:  return ui_text("Cross");
+    case 1:  return ui_text("Circle");
+    case 2:  return ui_text("Square");
+    case 3:  return ui_text("Triangle");
+    case 4:  return "Select";
+    case 5:  return "Home";
+    case 6:  return "Start";
+    case 7:  return "L3";
+    case 8:  return "R3";
+    case 9:  return "L1";
+    case 10: return "R1";
+    case 11: return ui_text("Up");
+    case 12: return ui_text("Down");
+    case 13: return ui_text("Left");
+    case 14: return ui_text("Right");
+    default: return "?";
+    }
+}
+
+// Texto do atalho no controle: "Select + L1" (Select sempre primeiro).
+static void shortcut_pad_text(int binding, char* out, size_t cap) {
+    out[0] = 0;
+    if (RECOMP_LAUNCHER_PAD_IS_BUTTON(binding)) {
+        snprintf(out, cap, "%s",
+                 shortcut_pad_button_name(RECOMP_LAUNCHER_PAD_BUTTON_CODE(binding)));
+    } else if (RECOMP_LAUNCHER_PAD_IS_AXIS(binding)) {
+        const int code = RECOMP_LAUNCHER_PAD_AXIS_CODE(binding);
+        snprintf(out, cap, "%s", code == 4 ? "L2" : code == 5 ? "R2"
+                                 : ui_text("Analog stick"));
+    } else if (RECOMP_LAUNCHER_PAD_IS_BUTTON_COMBO(binding)) {
+        const uint32_t mask = (uint32_t)RECOMP_LAUNCHER_PAD_BUTTON_COMBO_MASK(binding);
+        if (mask & (1u << 4)) snprintf(out, cap, "Select");
+        for (int code = 0; code < 32; ++code) {
+            if (code == 4 || !(mask & (1u << code))) continue;
+            if (out[0]) strncat(out, " + ", cap - strlen(out) - 1);
+            strncat(out, shortcut_pad_button_name(code), cap - strlen(out) - 1);
+        }
+    }
+    if (!out[0]) snprintf(out, cap, "%s", ui_text("(unbound)"));
+}
+
+// Uma linha da tabela: nome | botão do teclado | botão do controle | descrição.
+// action < 0 = atalho fixo (só mostra os textos, sem trocar).
+static void shortcut_row(LauncherModel* m, const LauncherTheme& th, int action,
+                         const char* title, const char* fixed_key,
+                         const char* fixed_pad, const char* text) {
+    ImGui::PushID(title);
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text));
-    ImGui::TextWrapped("%s", ui_text(title));
-    ImGui::PopStyleColor();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(ui_text(title));
+    char key[96], pad[96];
+    if (action >= 0) {
+        const int sc = m->s.assist_key_bind[action];
+        snprintf(key, sizeof key, "%s",
+                 sc > 0 ? settings_key_label(sc) : ui_text("(unbound)"));
+        shortcut_pad_text(m->s.assist_pad_bind[action], pad, sizeof pad);
+    } else {
+        snprintf(key, sizeof key, "%s", fixed_key);
+        snprintf(pad, sizeof pad, "%s", fixed_pad);
+    }
+    const bool cap_key = action >= 0 && m->capturing && m->capture_assist &&
+                         !m->capture_pad && m->capture_btn == action;
+    const bool cap_pad = action >= 0 && m->capturing && m->capture_assist &&
+                         m->capture_pad && m->capture_btn == action;
     ImGui::TableSetColumnIndex(1);
-    ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
-    ImGui::TextWrapped("%s", keys);
-    ImGui::PopStyleColor();
+    if (action < 0) ImGui::BeginDisabled();
+    ImGui::PushID("key");
+    if (ImGui::Button(cap_key ? ui_text("[ key... ]") : key, ImVec2(-FLT_MIN, 0)) &&
+        action >= 0)
+        launcher_model_begin_assist_capture(m, action, false);
+    ImGui::PopID();
     ImGui::TableSetColumnIndex(2);
+    ImGui::PushID("pad");
+    if (ImGui::Button(cap_pad ? ui_text("[ button... ]") : pad, ImVec2(-FLT_MIN, 0)) &&
+        action >= 0)
+        launcher_model_begin_assist_capture(m, action, true);
+    ImGui::PopID();
+    if (action < 0) ImGui::EndDisabled();
+    ImGui::TableSetColumnIndex(3);
     ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
     ImGui::TextWrapped("%s", ui_text(text));
     ImGui::PopStyleColor();
-}
-
-static void shortcut_keys(LauncherModel* m, int action, char* out, size_t cap) {
-    char pad[64];
-    pad[0] = 0;
-    const char* key = "";
-    if (action >= 0 && action < m->assist_binding_count) {
-        key = settings_key_label(m->s.assist_key_bind[action]);
-        settings_pad_label(m->s.assist_pad_bind[action], pad, sizeof pad);
-    }
-    snprintf(out, cap, "%s\n%s", key && key[0] ? key : ui_text("(unbound)"),
-             pad[0] ? pad : ui_text("(unbound)"));
+    ImGui::PopID();
 }
 
 void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
@@ -5936,45 +5996,44 @@ void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
     ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
     ImGui::PushTextWrapPos();
     ImGui::TextWrapped("%s", ui_text("Shortcuts that work while you play. The controller ones use Select together with another button; the game also sees those buttons, so press them quickly."));
+    ImGui::TextWrapped("%s", ui_text("Click a button below and press the key, or the controller button or combination you want. Esc cancels."));
     ImGui::PopTextWrapPos();
     ImGui::PopStyleColor();
     ImGui::Dummy(ImVec2(0, px(8)));
 
-    // 0 rewind, 1 save states, 2 fast-forward, 3 fast-forward toggle (PSX)
-    char k_ff[160], k_fft[160], k_ss[160], k_rw[160];
-    shortcut_keys(m, 2, k_ff, sizeof k_ff);
-    shortcut_keys(m, 3, k_fft, sizeof k_fft);
-    shortcut_keys(m, 1, k_ss, sizeof k_ss);
-    shortcut_keys(m, 0, k_rw, sizeof k_rw);
-    if (ImGui::BeginTable("shortcuts_help", 3,
-                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersInnerH)) {
-        ImGui::TableSetupColumn(ui_text("Action"), ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn(ui_text("Keyboard / Controller"), ImGuiTableColumnFlags_WidthStretch, 0.9f);
-        ImGui::TableSetupColumn(ui_text("What it does"), ImGuiTableColumnFlags_WidthStretch, 2.2f);
+    // Ações do runtime PSX: 0 rebobinar, 1 save states, 2 avanço rápido,
+    // 3 avanço rápido liga/desliga.
+    const bool binds = m->settings_bindings && m->assist_binding_count >= 4;
+    if (ImGui::BeginTable("shortcuts_table", 4,
+                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn(ui_text("Action"), ImGuiTableColumnFlags_WidthStretch, 1.1f);
+        ImGui::TableSetupColumn(ui_text("Keyboard"), ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn(ui_text("Controller"), ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn(ui_text("What it does"), ImGuiTableColumnFlags_WidthStretch, 2.4f);
         ImGui::TableHeadersRow();
-        shortcut_row(th, "Fast-forward", k_ff,
-            "Runs the game faster while you hold it. Good for walking, grinding and long dialogue.");
-        shortcut_row(th, "Fast-forward toggle", k_fft,
-            "Press once to keep fast-forward on, press again to turn it off. Use it to rush through cutscenes.");
-        shortcut_row(th, "Save states", k_ss,
-            "Opens the save state menu: save or load the exact moment in one of the slots.");
-        shortcut_row(th, "Cheats", "F5\nSelect + L3",
+        if (binds) {
+            shortcut_row(m, th, 2, "Fast-forward", nullptr, nullptr,
+                "Runs the game faster while you hold it. Good for walking, grinding and long dialogue.");
+            shortcut_row(m, th, 3, "Fast-forward toggle", nullptr, nullptr,
+                "Press once to keep fast-forward on, press again to turn it off. Use it to rush through cutscenes.");
+            shortcut_row(m, th, 1, "Save states", nullptr, nullptr,
+                "Opens the save state menu: save or load the exact moment in one of the slots.");
+            if (m->s.rewind_enabled)
+                shortcut_row(m, th, 0, "Rewind", nullptr, nullptr,
+                    "Goes back a few seconds of play.");
+        }
+        shortcut_row(m, th, -1, "Cheats", "F5", "Select + L3",
             "Opens the cheats menu in game to turn cheats on or off (list in the Cheats tab).");
-        if (m->s.rewind_enabled)
-            shortcut_row(th, "Rewind", k_rw,
-                "Goes back a few seconds of play.");
         ImGui::EndTable();
     }
-
-    ImGui::Dummy(ImVec2(0, px(12)));
-    ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
-    ImGui::TextUnformatted(ui_text("CHANGE BUTTONS"));
-    ImGui::PopStyleColor();
-    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
-    ImGui::TextWrapped("%s", ui_text("Click a button below and press the key, or the controller button or combination you want. Esc cancels."));
-    ImGui::PopStyleColor();
-    draw_assist_binding_editor(m, th, "shortcut_binds", 0, true);
+    if (binds) {
+        if (ImGui::Button(ui_text("Reset Host Shortcuts")))
+            launcher_model_reset_assist_bindings(m);
+        if (m->capturing && m->capture_assist) {
+            ImGui::SameLine();
+            ImGui::TextColored(col(th.warn), "%s", ui_text("Listening... (Esc cancels)"));
+        }
+    }
 
     if (m->assist_fast_forward_max > m->assist_fast_forward_min) {
         ImGui::Dummy(ImVec2(0, px(12)));
