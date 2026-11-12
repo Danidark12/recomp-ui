@@ -6022,37 +6022,34 @@ void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
                 shortcut_row(m, th, 0, "Rewind", nullptr, nullptr,
                     "Goes back a few seconds of play.");
         }
-        shortcut_row(m, th, -1, "Cheats", "F5", "Select + L3",
+        char pad_cheats[64], pad_menu[64];
+        snprintf(pad_cheats, sizeof pad_cheats, "Select + %s", ui_text("Square"));
+        snprintf(pad_menu, sizeof pad_menu, "Select + L3");
+        shortcut_row(m, th, -1, "Quick save", "F5", ui_text("(unbound)"),
+            "Saves the exact moment to the quick slot, without opening any menu.");
+        shortcut_row(m, th, -1, "Quick load", "Shift + F5", ui_text("(unbound)"),
+            "Loads the quick slot saved with Quick save.");
+        shortcut_row(m, th, -1, "Cheats", "F4", pad_cheats,
             "Opens the cheats menu in game to turn cheats on or off (list in the Cheats tab).");
+        shortcut_row(m, th, -1, "In-game menu", "Ctrl + L / F10", pad_menu,
+            "Opens the launcher menu over the game (settings, mods, cheats) without closing it.");
         ImGui::EndTable();
     }
     if (binds) {
-        if (ImGui::Button(ui_text("Reset Host Shortcuts")))
+        if (ImGui::Button(ui_text("Reset Host Shortcuts"))) {
             launcher_model_reset_assist_bindings(m);
+            for (int i = 0; i < m->assist_binding_count; ++i)
+                launcher_binds_set_assist_key(m, i, m->s.assist_key_bind[i]);
+        }
         if (m->capturing && m->capture_assist) {
             ImGui::SameLine();
             ImGui::TextColored(col(th.warn), "%s", ui_text("Listening... (Esc cancels)"));
         }
     }
 
-    if (m->assist_fast_forward_max > m->assist_fast_forward_min) {
-        ImGui::Dummy(ImVec2(0, px(12)));
-        ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
-        ImGui::TextUnformatted(ui_text("FAST-FORWARD SPEED"));
-        ImGui::PopStyleColor();
-        ImGui::TextColored(col(th.text_muted), "%s",
-            ui_text("Target emulation speed while Fast-forward is held or latched."));
-        int speed = m->s.assist_fast_forward_multiplier;
-        if (speed < m->assist_fast_forward_min) speed = m->assist_fast_forward_min;
-        char fmt[32];
-        if (speed >= 17) snprintf(fmt, sizeof fmt, "%s", ui_text("MAX"));
-        else snprintf(fmt, sizeof fmt, "%dx", speed);
-        ImGui::SetNextItemWidth(px(360));
-        if (ImGui::SliderInt("##shortcut_ff_speed", &speed,
-                             m->assist_fast_forward_min,
-                             m->assist_fast_forward_max, fmt))
-            m->s.assist_fast_forward_multiplier = speed;
-    }
+    // Velocidade do avanço rápido: o mesmo controle das configurações.
+    ImGui::Dummy(ImVec2(0, px(12)));
+    draw_fractional_fast_forward(m);
 
     ImGui::Dummy(ImVec2(0, px(12)));
     ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
