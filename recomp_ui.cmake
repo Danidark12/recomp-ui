@@ -161,6 +161,7 @@ function(recomp_target_launcher_ui TGT)
         ${RUI_SRC}/common/launcher_boot_timing.c  # PSX_LAUNCHER_BOOT_TIMING / LNG_BOOT_TIMING
         ${RUI_SRC}/common/launcher_ng_capi.c   # implements recomp_launcher_run_window()
         ${RUI_SRC}/common/launcher_i18n.cpp
+        ${RUI_SRC}/common/recomp_cheats.c   # cheats.txt (GameShark) compartilhado launcher/runtime
         ${RUI_SRC}/third_party/tinyfiledialogs.c
         # console-specific helpers (src/consoles/<id>/) — always compiled, only
         # reached when the active SystemProfile opts into the capability
