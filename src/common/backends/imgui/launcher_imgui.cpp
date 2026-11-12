@@ -32,6 +32,7 @@
 #include "launcher_mod_feature_actions.h"
 #include "launcher_mod_preparation.h"
 #include "recomp_moderation.h"   // local ignore/block list (online only)
+#include "recomp_cheats.h"
 #include "consoles/n64/n64_binds.h"   // RUI_N64_FIELD_* for the pad-capture path
 
 #include "launcher_sdlcompat.h"   // pulls the right SDL header + event shim
@@ -5809,6 +5810,86 @@ void draw_launcher_language(LauncherModel* m, const LauncherTheme& th) {
     ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
     ImGui::TextUnformatted("The choice is saved and applies immediately.");
     ImGui::PopStyleColor();
+    end_panel();
+}
+
+// Página "Cheats" (botão no topo). Lista o cheats.txt ao lado do executável
+// (formato GameShark, ver recomp_cheats.h); cada caixinha grava o arquivo na
+// hora. O runtime aplica os ligados a cada VBlank e tem o mesmo menu no jogo
+// (F5 / Select+L3).
+static bool g_show_cheats_page = false;
+static RecompCheatList g_cheats;
+static bool g_cheats_loaded = false;
+
+void draw_launcher_cheats(LauncherModel* m, const LauncherTheme& th) {
+    (void)m;
+    if (!g_cheats_loaded) {
+        recomp_cheats_load(&g_cheats);
+        g_cheats_loaded = true;
+    }
+    if (!begin_panel("launcher_cheats_page", 0, false)) {
+        end_panel();
+        return;
+    }
+    eyebrow("CHEATS");
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::PushTextWrapPos();
+    ImGui::TextWrapped("%s", ui_text("Turn on the cheats you want. They are applied every frame while you play, and can also be toggled in game with F5 or Select+L3 on the controller."));
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, px(8)));
+    if (ImGui::Button(ui_text("Reload"))) {
+        recomp_cheats_load(&g_cheats);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ui_text("Turn all off"))) {
+        for (int i = 0; i < g_cheats.count; ++i) g_cheats.cheats[i].enabled = 0;
+        recomp_cheats_save(&g_cheats);
+    }
+    ImGui::Dummy(ImVec2(0, px(10)));
+    if (!g_cheats.loaded || g_cheats.count == 0) {
+        ImGui::PushStyleColor(ImGuiCol_Text, col(th.warn));
+        ImGui::TextWrapped("%s", g_cheats.loaded
+            ? ui_text("cheats.txt has no cheats.")
+            : ui_text("cheats.txt was not found next to the game."));
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+        ImGui::TextWrapped("%s", recomp_cheats_path());
+        ImGui::PopStyleColor();
+        end_panel();
+        return;
+    }
+    const bool pt = ui_language_is_pt();
+    for (int i = 0; i < g_cheats.count; ++i) {
+        RecompCheat* c = &g_cheats.cheats[i];
+        ImGui::PushID(i);
+        bool on = c->enabled != 0;
+        if (!c->supported) ImGui::BeginDisabled();
+        if (ImGui::Checkbox(recomp_cheat_name(c, pt ? 1 : 0), &on)) {
+            c->enabled = on ? 1 : 0;
+            recomp_cheats_save(&g_cheats);
+        }
+        if (!c->supported) ImGui::EndDisabled();
+        const char* note = recomp_cheat_note(c, pt ? 1 : 0);
+        if (!c->supported || (note && note[0])) {
+            ImGui::Indent(px(34));
+            ImGui::PushTextWrapPos();
+            if (!c->supported) {
+                ImGui::PushStyleColor(ImGuiCol_Text, col(th.warn));
+                ImGui::TextWrapped("%s", ui_text("Unsupported code type - it will not be applied."));
+                ImGui::PopStyleColor();
+            }
+            if (note && note[0]) {
+                ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+                ImGui::TextWrapped("%s", note);
+                ImGui::PopStyleColor();
+            }
+            ImGui::PopTextWrapPos();
+            ImGui::Unindent(px(34));
+        }
+        ImGui::Dummy(ImVec2(0, px(4)));
+        ImGui::PopID();
+    }
     end_panel();
 }
 
@@ -14690,18 +14771,20 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
         const float resume_y = ImGui::GetCursorPosY();
         const float right = ImGui::GetWindowContentRegionMax().x;
         const float y = hdr_top + px(6.0f);
-        if (m->view == LNG_VIEW_DASHBOARD && !g_show_language_page) {
+        if (m->view == LNG_VIEW_DASHBOARD && !g_show_language_page &&
+            !g_show_cheats_page) {
             // Largura de cada botão pelo texto (traduções são mais longas
             // que o inglês), com 110 px como mínimo.
             struct NavBtn { const char* label; int action; };
-            NavBtn btns[5];
+            NavBtn btns[6];
             int count = 0;
             btns[count++] = {"Settings", 0};
             if (m->mods) btns[count++] = {"Mods", 1};
             if (m->has_assist_tools) btns[count++] = {"Assist Tools", 2};
             if (m->credits_text && m->credits_text[0]) btns[count++] = {"Credits", 3};
+            btns[count++] = {"Cheats##cheats_page", 5};
             btns[count++] = {"Language##ui_lang_page", 4};
-            float ws[5];
+            float ws[6];
             float total = 0.0f;
             const float pad = ImGui::GetStyle().FramePadding.x * 2.0f + px(16.0f);
             for (int i = 0; i < count; ++i) {
@@ -14722,6 +14805,10 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
                         case 1: launcher_model_set_view(m, LNG_VIEW_MODS); break;
                         case 2: launcher_model_set_view(m, LNG_VIEW_ASSIST_TOOLS); break;
                         case 3: launcher_model_set_view(m, LNG_VIEW_CREDITS); break;
+                        case 5:
+                            g_show_cheats_page = true;
+                            g_cheats_loaded = false;   // relê o arquivo ao abrir
+                            break;
                         default: g_show_language_page = true; break;
                     }
                 }
@@ -14758,6 +14845,7 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
                 ImGui::SetCursorPos(ImVec2(right - w, y));
                 if (ImGui::Button(ui_text("< Back"), ImVec2(w, px(34)))) {
                     g_show_language_page = false;
+                    g_show_cheats_page = false;
                     /* Retrace the netplay fork rather than dropping to the
                      * dashboard from the middle of it: the browser and the
                      * sign-in page were both reached through the chooser. */
@@ -14795,7 +14883,10 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
     begin_container("body", ImVec2(0, body_h));
     if (g_show_language_page && m->view != LNG_VIEW_DASHBOARD)
         g_show_language_page = false;   // another page took over
+    if (g_show_cheats_page && m->view != LNG_VIEW_DASHBOARD)
+        g_show_cheats_page = false;
     if (g_show_language_page) draw_launcher_language(m, th);
+    else if (g_show_cheats_page) draw_launcher_cheats(m, th);
     else switch (m->view) {
         case LNG_VIEW_DASHBOARD:  draw_dashboard(m, th, logical_w); break;
         case LNG_VIEW_SETTINGS:   draw_settings(m, th);             break;
