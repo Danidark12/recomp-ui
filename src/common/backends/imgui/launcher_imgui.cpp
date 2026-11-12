@@ -3803,6 +3803,125 @@ void draw_launcher_cheats(LauncherModel* m, const LauncherTheme& th) {
     end_panel();
 }
 
+// Página "Atalhos" (botão no topo): explica os atalhos do jogo e deixa trocar
+// os botões (mesmo editor das "Host shortcuts" dos controles), a velocidade do
+// avanço rápido e a opção de pular FMVs. Valores do modelo -> settings.toml.
+static bool g_show_shortcuts_page = false;
+
+static void shortcut_row(const LauncherTheme& th, const char* title,
+                         const char* keys, const char* text) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text));
+    ImGui::TextWrapped("%s", ui_text(title));
+    ImGui::PopStyleColor();
+    ImGui::TableSetColumnIndex(1);
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
+    ImGui::TextWrapped("%s", keys);
+    ImGui::PopStyleColor();
+    ImGui::TableSetColumnIndex(2);
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::TextWrapped("%s", ui_text(text));
+    ImGui::PopStyleColor();
+}
+
+static void shortcut_keys(LauncherModel* m, int action, char* out, size_t cap) {
+    char pad[64];
+    pad[0] = 0;
+    const char* key = "";
+    if (action >= 0 && action < m->assist_binding_count) {
+        key = settings_key_label(m->s.assist_key_bind[action]);
+        settings_pad_label(m->s.assist_pad_bind[action], pad, sizeof pad);
+    }
+    snprintf(out, cap, "%s\n%s", key && key[0] ? key : ui_text("(unbound)"),
+             pad[0] ? pad : ui_text("(unbound)"));
+}
+
+void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
+    if (!begin_panel("launcher_shortcuts_page", 0, false)) {
+        end_panel();
+        return;
+    }
+    eyebrow("SHORTCUTS");
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::PushTextWrapPos();
+    ImGui::TextWrapped("%s", ui_text("Shortcuts that work while you play. The controller ones use Select together with another button; the game also sees those buttons, so press them quickly."));
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, px(8)));
+
+    // 0 rewind, 1 save states, 2 fast-forward, 3 fast-forward toggle (PSX)
+    char k_ff[160], k_fft[160], k_ss[160], k_rw[160];
+    shortcut_keys(m, 2, k_ff, sizeof k_ff);
+    shortcut_keys(m, 3, k_fft, sizeof k_fft);
+    shortcut_keys(m, 1, k_ss, sizeof k_ss);
+    shortcut_keys(m, 0, k_rw, sizeof k_rw);
+    if (ImGui::BeginTable("shortcuts_help", 3,
+                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersInnerH)) {
+        ImGui::TableSetupColumn(ui_text("Action"), ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn(ui_text("Keyboard / Controller"), ImGuiTableColumnFlags_WidthStretch, 0.9f);
+        ImGui::TableSetupColumn(ui_text("What it does"), ImGuiTableColumnFlags_WidthStretch, 2.2f);
+        ImGui::TableHeadersRow();
+        shortcut_row(th, "Fast-forward", k_ff,
+            "Runs the game faster while you hold it. Good for walking, grinding and long dialogue.");
+        shortcut_row(th, "Fast-forward toggle", k_fft,
+            "Press once to keep fast-forward on, press again to turn it off. Use it to rush through cutscenes.");
+        shortcut_row(th, "Save states", k_ss,
+            "Opens the save state menu: save or load the exact moment in one of the slots.");
+        shortcut_row(th, "Cheats", "F5\nSelect + L3",
+            "Opens the cheats menu in game to turn cheats on or off (list in the Cheats tab).");
+        if (m->s.rewind_enabled)
+            shortcut_row(th, "Rewind", k_rw,
+                "Goes back a few seconds of play.");
+        ImGui::EndTable();
+    }
+
+    ImGui::Dummy(ImVec2(0, px(12)));
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
+    ImGui::TextUnformatted(ui_text("CHANGE BUTTONS"));
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::TextWrapped("%s", ui_text("Click a button below and press the key, or the controller button or combination you want. Esc cancels."));
+    ImGui::PopStyleColor();
+    draw_assist_binding_editor(m, th, "shortcut_binds", 0, true);
+
+    if (m->assist_fast_forward_max > m->assist_fast_forward_min) {
+        ImGui::Dummy(ImVec2(0, px(12)));
+        ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
+        ImGui::TextUnformatted(ui_text("FAST-FORWARD SPEED"));
+        ImGui::PopStyleColor();
+        ImGui::TextColored(col(th.text_muted), "%s",
+            ui_text("Target emulation speed while Fast-forward is held or latched."));
+        int speed = m->s.assist_fast_forward_multiplier;
+        if (speed < m->assist_fast_forward_min) speed = m->assist_fast_forward_min;
+        char fmt[32];
+        if (speed >= 17) snprintf(fmt, sizeof fmt, "%s", ui_text("MAX"));
+        else snprintf(fmt, sizeof fmt, "%dx", speed);
+        ImGui::SetNextItemWidth(px(360));
+        if (ImGui::SliderInt("##shortcut_ff_speed", &speed,
+                             m->assist_fast_forward_min,
+                             m->assist_fast_forward_max, fmt))
+            m->s.assist_fast_forward_multiplier = speed;
+    }
+
+    ImGui::Dummy(ImVec2(0, px(12)));
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.accent2));
+    ImGui::TextUnformatted(ui_text("CUTSCENES"));
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+    ImGui::PushTextWrapPos();
+    ImGui::TextWrapped("%s", ui_text("Scenes played with the game characters cannot be skipped in Valkyrie Profile: turn on the fast-forward toggle at the start of the scene and turn it off at the end (raise the speed above for quicker scenes). Animated videos (FMV) can be skipped automatically with the option below."));
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    if (m->has_skip_fmv) {
+        bool sk = m->s.auto_skip_fmv != 0;
+        if (ImGui::Checkbox(ui_text("Skip FMVs"), &sk))
+            m->s.auto_skip_fmv = sk ? 1 : 0;
+    }
+    end_panel();
+}
+
 void draw_credits(LauncherModel* m, const LauncherTheme& th) {
     if (!begin_panel("credits_page", 0, false)) {
         end_panel();
@@ -9307,19 +9426,20 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
         const float right = ImGui::GetWindowContentRegionMax().x;
         const float y = hdr_top + px(6.0f);
         if (m->view == LNG_VIEW_DASHBOARD && !g_show_language_page &&
-            !g_show_cheats_page) {
+            !g_show_cheats_page && !g_show_shortcuts_page) {
             // Largura de cada botão pelo texto (traduções são mais longas
             // que o inglês), com 110 px como mínimo.
             struct NavBtn { const char* label; int action; };
-            NavBtn btns[6];
+            NavBtn btns[7];
             int count = 0;
             btns[count++] = {"Settings", 0};
             if (m->mods) btns[count++] = {"Mods", 1};
             if (m->has_assist_tools) btns[count++] = {"Assist Tools", 2};
             if (m->credits_text && m->credits_text[0]) btns[count++] = {"Credits", 3};
+            btns[count++] = {"Shortcuts##shortcuts_page", 6};
             btns[count++] = {"Cheats##cheats_page", 5};
             btns[count++] = {"Language##ui_lang_page", 4};
-            float ws[6];
+            float ws[7];
             float total = 0.0f;
             const float pad = ImGui::GetStyle().FramePadding.x * 2.0f + px(16.0f);
             for (int i = 0; i < count; ++i) {
@@ -9336,6 +9456,9 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
                         case 1: launcher_model_set_view(m, LNG_VIEW_MODS); break;
                         case 2: launcher_model_set_view(m, LNG_VIEW_ASSIST_TOOLS); break;
                         case 3: launcher_model_set_view(m, LNG_VIEW_CREDITS); break;
+                        case 6:
+                            g_show_shortcuts_page = true;
+                            break;
                         case 5:
                             g_show_cheats_page = true;
                             g_cheats_loaded = false;   // relê o arquivo ao abrir
@@ -9362,6 +9485,7 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
             if (ImGui::Button(ui_text("< Back"), ImVec2(w, px(34)))) {
                 g_show_language_page = false;
                 g_show_cheats_page = false;
+                g_show_shortcuts_page = false;
                 launcher_model_set_view(m, LNG_VIEW_DASHBOARD);
             }
         }
@@ -9393,8 +9517,11 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
         g_show_language_page = false;   // another page took over
     if (g_show_cheats_page && m->view != LNG_VIEW_DASHBOARD)
         g_show_cheats_page = false;
+    if (g_show_shortcuts_page && m->view != LNG_VIEW_DASHBOARD)
+        g_show_shortcuts_page = false;
     if (g_show_language_page) draw_launcher_language(m, th);
     else if (g_show_cheats_page) draw_launcher_cheats(m, th);
+    else if (g_show_shortcuts_page) draw_launcher_shortcuts(m, th);
     else switch (m->view) {
         case LNG_VIEW_DASHBOARD:  draw_dashboard(m, th, logical_w); break;
         case LNG_VIEW_SETTINGS:   draw_settings(m, th);             break;
