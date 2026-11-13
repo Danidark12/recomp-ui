@@ -3932,6 +3932,8 @@ void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
                 shortcut_row(m, th, 0, "Rewind", nullptr, nullptr,
                     "Goes back a few seconds of play.");
         }
+        shortcut_row(m, th, -1, "Options", "F4", "Select + Square",
+            "Opens the in-game options menu: aspect ratio, filters, monitor FPS and back to the launcher.");
         shortcut_row(m, th, -1, "Cheats", "F5", "Select + L3",
             "Opens the cheats menu in game to turn cheats on or off (list in the Cheats tab).");
         ImGui::EndTable();
