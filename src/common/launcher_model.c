@@ -33,7 +33,7 @@ static const int kFreqCount   = (int)(sizeof(kFreqTable) / sizeof(kFreqTable[0])
 
 static const int kWindowWidths[]    = { 960, 1280, 1600, 1920 };
 static const int kWindowWidthCount  = (int)(sizeof(kWindowWidths) / sizeof(kWindowWidths[0]));
-static const int kInterpFpsTable[]  = { 0, 90, 120, 144, 165, 240 };
+static const int kInterpFpsTable[]  = { 0, 75, 100, 120, 144, 165, 180, 200, 240, 360 };
 static const int kInterpFpsCount    = (int)(sizeof(kInterpFpsTable) / sizeof(kInterpFpsTable[0]));
 static const char* kScreenKindNames[4] = { "Raw", "CRT", "Composite", "Trinitron" };
 
