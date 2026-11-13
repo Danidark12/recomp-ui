@@ -2746,6 +2746,20 @@ ImGui::PopID();
             launcher_model_cycle_screen_kind(m);
     }
 
+    /* Filtro de tela (LCD / CRT): só no OpenGL. Gravado em screen_filter.txt,
+     * o mesmo que o menu de opções do jogo (F4) usa. */
+    if (m->s.renderer) {
+        static int s_filter = -1;
+        if (s_filter < 0) s_filter = recomp_screen_filter_load();
+        row_label("Screen filter", th);
+        if (ImGui::Button(ui_text(recomp_screen_filter_name(s_filter)), ImVec2(px(170), px(30)))) {
+            s_filter = (s_filter + 1) % RECOMP_SCREEN_FILTER_COUNT;
+            recomp_screen_filter_save(s_filter);
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            ImGui::SetTooltip("%s", ui_text("LCD grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Works best at 3x window size or larger; also in the in-game Options menu (F4)."));
+    }
+
     // Frame interpolation is only meaningful under OpenGL (Software has no
     // interpolation pass); Presentation target only matters once frame
     // interpolation is actually on.
