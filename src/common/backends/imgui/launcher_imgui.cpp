@@ -2750,14 +2750,11 @@ ImGui::PopID();
     // interpolation pass); Presentation target only matters once frame
     // interpolation is actually on.
     if (m->has_frame_interp && m->s.renderer) {
-        row_label("Frame interpolation", th);
-        bool fi = m->s.frame_interp != 0;
-        if (ImGui::Checkbox("##fi", &fi)) launcher_model_toggle_frame_interp(m);
-        if (m->s.frame_interp) {
-            row_label("Presentation target", th);
-            if (ImGui::Button(ui_text(launcher_model_interp_fps_label(m)), ImVec2(px(150), px(30))))
-                launcher_model_cycle_interp_fps(m);
-        }
+        row_label("Presentation target", th);
+        if (ImGui::Button(ui_text(launcher_model_interp_fps_label(m)), ImVec2(px(170), px(30))))
+            launcher_model_cycle_interp_fps(m);
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            ImGui::SetTooltip("%s", ui_text("Default: the original 60 fps. Display refresh: matches your monitor's Hz automatically. The other values fix the rate. The game speed never changes; in-between frames are blended."));
     }
 
     // VSync sits with frame interpolation because both decide how a finished
