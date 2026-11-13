@@ -1617,15 +1617,28 @@ void launcher_model_toggle_frame_interp(LauncherModel* m) {
     m->s.frame_interp = !m->s.frame_interp;
 }
 
+/* Um só seletor: Padrão (60, sem interpolação) -> Monitor -> 75 ... 360 ->
+ * Padrão. "Padrão" é a interpolação desligada. */
 void launcher_model_cycle_interp_fps(LauncherModel* m) {
+    if (!m->s.frame_interp) {
+        m->s.frame_interp = 1;
+        m->s.frame_interp_fps = kInterpFpsTable[0];
+        return;
+    }
     int idx = 0;
     for (int i = 0; i < kInterpFpsCount; ++i)
         if (kInterpFpsTable[i] == m->s.frame_interp_fps) { idx = i; break; }
-    m->s.frame_interp_fps = kInterpFpsTable[(idx + 1) % kInterpFpsCount];
+    if (idx + 1 >= kInterpFpsCount) {
+        m->s.frame_interp = 0;
+        m->s.frame_interp_fps = 0;
+        return;
+    }
+    m->s.frame_interp_fps = kInterpFpsTable[idx + 1];
 }
 
 const char* launcher_model_interp_fps_label(const LauncherModel* m) {
     static char buf[24];
+    if (!m->s.frame_interp) return "Default (60 fps)";
     if (m->s.frame_interp_fps == 0) return "Display refresh";
     snprintf(buf, sizeof(buf), "%d fps", m->s.frame_interp_fps);
     return buf;
