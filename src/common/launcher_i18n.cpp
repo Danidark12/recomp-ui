@@ -1957,6 +1957,7 @@ static const LauncherI18nEntry kSpanish[] = {
     {"Select + Cross", "Select + Equis"},
     {"Volume", "Volumen"},
     {"Cheats", "Trucos"},
+    {"CHEATS", "TRUCOS"},
     {"PLAYER %d / %s",
      "JUGADOR %d / %s"},
     {"PLAYER %d",
