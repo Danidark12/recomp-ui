@@ -9571,7 +9571,14 @@ void draw_ui(LauncherModel* m, const LauncherTheme& th, int logical_w, int logic
     const float footer_h = px(92.0f);   // divider + clearance + CTA + its glow
     float body_h = ImGui::GetContentRegionAvail().y - footer_h;
     if (body_h < px(80.0f)) body_h = px(80.0f);
-    begin_container("body", ImVec2(0, body_h));
+    // Páginas de texto longo (Atalhos/Cheats): barra de rolagem sempre visível.
+    // Sem isso, quando o conteúdo fica no limite da altura, a barra aparece,
+    // estreita o texto, o texto quebra diferente e a barra some de novo, a
+    // cada quadro (a página pisca).
+    const ImGuiWindowFlags body_wflags =
+        (g_show_cheats_page || g_show_shortcuts_page)
+            ? ImGuiWindowFlags_AlwaysVerticalScrollbar : 0;
+    begin_container("body", ImVec2(0, body_h), ImGuiChildFlags_None, body_wflags);
     if (g_show_language_page && m->view != LNG_VIEW_DASHBOARD)
         g_show_language_page = false;   // another page took over
     if (g_show_cheats_page && m->view != LNG_VIEW_DASHBOARD)
