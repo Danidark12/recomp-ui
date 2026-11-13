@@ -3773,18 +3773,18 @@ void draw_launcher_cheats(LauncherModel* m, const LauncherTheme& th) {
         end_panel();
         return;
     }
-    const bool pt = ui_language_is_pt();
+    const int cheat_lang = recomp_cheat_lang_from_code(launcher_i18n_language());
     for (int i = 0; i < g_cheats.count; ++i) {
         RecompCheat* c = &g_cheats.cheats[i];
         ImGui::PushID(i);
         bool on = c->enabled != 0;
         if (!c->supported) ImGui::BeginDisabled();
-        if (ImGui::Checkbox(recomp_cheat_name(c, pt ? 1 : 0), &on)) {
+        if (ImGui::Checkbox(recomp_cheat_name(c, cheat_lang), &on)) {
             c->enabled = on ? 1 : 0;
             recomp_cheats_save(&g_cheats);
         }
         if (!c->supported) ImGui::EndDisabled();
-        const char* note = recomp_cheat_note(c, pt ? 1 : 0);
+        const char* note = recomp_cheat_note(c, cheat_lang);
         if (!c->supported || (note && note[0])) {
             ImGui::Indent(px(34));
             ImGui::PushTextWrapPos();

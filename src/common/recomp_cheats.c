@@ -79,21 +79,29 @@ static void trim(char* s) {
     if (i) memmove(s, s + i, n - i + 1);
 }
 
-/* "texto pt | texto en" -> dois campos */
-static void split_lang(const char* src, char* pt, size_t pt_cap, char* en, size_t en_cap) {
-    const char* bar = strstr(src, " | ");
-    if (bar) {
-        size_t n = (size_t)(bar - src);
-        if (n >= pt_cap) n = pt_cap - 1;
-        memcpy(pt, src, n);
-        pt[n] = 0;
-        snprintf(en, en_cap, "%s", bar + 3);
-    } else {
-        snprintf(pt, pt_cap, "%s", src);
-        en[0] = 0;
-    }
-    trim(pt);
-    trim(en);
+/* "texto pt | texto en | texto es" -> três campos (en/es opcionais) */
+static void copy_field(const char* b, const char* e, char* out, size_t cap) {
+    size_t n = (size_t)(e - b);
+    if (n >= cap) n = cap - 1;
+    memcpy(out, b, n);
+    out[n] = 0;
+    trim(out);
+}
+
+static void split_lang(const char* src, char* pt, size_t pt_cap, char* en, size_t en_cap,
+                       char* es, size_t es_cap) {
+    const char* end = src + strlen(src);
+    const char* bar1 = strstr(src, " | ");
+    const char* bar2 = bar1 ? strstr(bar1 + 3, " | ") : NULL;
+    copy_field(src, bar1 ? bar1 : end, pt, pt_cap);
+    if (bar1) copy_field(bar1 + 3, bar2 ? bar2 : end, en, en_cap); else en[0] = 0;
+    if (bar2) copy_field(bar2 + 3, end, es, es_cap); else es[0] = 0;
+}
+
+static void append_note(char* dst, size_t cap, const char* add) {
+    if (!add[0]) return;
+    if (dst[0] && strlen(dst) + 2 < cap) strcat(dst, " ");
+    if (strlen(dst) + strlen(add) + 1 < cap) strcat(dst, add);
 }
 
 static int parse_code(const char* s, uint32_t* a, uint16_t* v) {
@@ -160,21 +168,17 @@ int recomp_cheats_load(RecompCheatList* list) {
             for (char* p = line + 1; p < close; ++p)
                 if (*p == 'x' || *p == 'X' || *p == '*') cur->enabled = 1;
             split_lang(close + 1, cur->name_pt, sizeof(cur->name_pt),
-                       cur->name_en, sizeof(cur->name_en));
+                       cur->name_en, sizeof(cur->name_en),
+                       cur->name_es, sizeof(cur->name_es));
             continue;
         }
         if (!cur) continue;
         if (line[0] == '>') {
-            char pt[RECOMP_CHEATS_NOTE], en[RECOMP_CHEATS_NOTE];
-            split_lang(line + 1, pt, sizeof(pt), en, sizeof(en));
-            if (cur->note_pt[0] && strlen(cur->note_pt) + strlen(pt) + 2 < sizeof(cur->note_pt))
-                strcat(cur->note_pt, " ");
-            if (strlen(cur->note_pt) + strlen(pt) + 1 < sizeof(cur->note_pt))
-                strcat(cur->note_pt, pt);
-            if (cur->note_en[0] && strlen(cur->note_en) + strlen(en) + 2 < sizeof(cur->note_en))
-                strcat(cur->note_en, " ");
-            if (strlen(cur->note_en) + strlen(en) + 1 < sizeof(cur->note_en))
-                strcat(cur->note_en, en);
+            char pt[RECOMP_CHEATS_NOTE], en[RECOMP_CHEATS_NOTE], es[RECOMP_CHEATS_NOTE];
+            split_lang(line + 1, pt, sizeof(pt), en, sizeof(en), es, sizeof(es));
+            append_note(cur->note_pt, sizeof(cur->note_pt), pt);
+            append_note(cur->note_en, sizeof(cur->note_en), en);
+            append_note(cur->note_es, sizeof(cur->note_es), es);
             continue;
         }
         uint32_t a;
@@ -212,11 +216,13 @@ int recomp_cheats_save(const RecompCheatList* list) {
     for (int i = 0; i < list->count; ++i) {
         const RecompCheat* c = &list->cheats[i];
         fprintf(f, "\n[%s] %s", c->enabled ? "x" : " ", c->name_pt);
-        if (c->name_en[0]) fprintf(f, " | %s", c->name_en);
+        if (c->name_en[0] || c->name_es[0]) fprintf(f, " | %s", c->name_en);
+        if (c->name_es[0]) fprintf(f, " | %s", c->name_es);
         fputc('\n', f);
-        if (c->note_pt[0] || c->note_en[0]) {
+        if (c->note_pt[0] || c->note_en[0] || c->note_es[0]) {
             fprintf(f, "> %s", c->note_pt);
-            if (c->note_en[0]) fprintf(f, " | %s", c->note_en);
+            if (c->note_en[0] || c->note_es[0]) fprintf(f, " | %s", c->note_en);
+            if (c->note_es[0]) fprintf(f, " | %s", c->note_es);
             fputc('\n', f);
         }
         for (int k = 0; k < c->code_count; ++k)
@@ -234,14 +240,26 @@ int recomp_cheats_save(const RecompCheatList* list) {
 #endif
 }
 
-const char* recomp_cheat_name(const RecompCheat* c, int pt) {
-    if (!c) return "";
-    if (pt) return c->name_pt[0] ? c->name_pt : c->name_en;
-    return c->name_en[0] ? c->name_en : c->name_pt;
+int recomp_cheat_lang_from_code(const char* code) {
+    if (!code) return RECOMP_CHEAT_LANG_EN;
+    if (code[0] == 'p' || code[0] == 'P') return RECOMP_CHEAT_LANG_PT;
+    if ((code[0] == 'e' || code[0] == 'E') && (code[1] == 's' || code[1] == 'S'))
+        return RECOMP_CHEAT_LANG_ES;
+    return RECOMP_CHEAT_LANG_EN;
 }
 
-const char* recomp_cheat_note(const RecompCheat* c, int pt) {
+static const char* pick(const char* en, const char* pt, const char* es, int lang) {
+    if (lang == RECOMP_CHEAT_LANG_ES && es[0]) return es;
+    if (lang == RECOMP_CHEAT_LANG_PT && pt[0]) return pt;
+    return en[0] ? en : pt;
+}
+
+const char* recomp_cheat_name(const RecompCheat* c, int lang) {
     if (!c) return "";
-    if (pt) return c->note_pt[0] ? c->note_pt : c->note_en;
-    return c->note_en[0] ? c->note_en : c->note_pt;
+    return pick(c->name_en, c->name_pt, c->name_es, lang);
+}
+
+const char* recomp_cheat_note(const RecompCheat* c, int lang) {
+    if (!c) return "";
+    return pick(c->note_en, c->note_pt, c->note_es, lang);
 }
