@@ -3708,11 +3708,18 @@ void draw_launcher_language(LauncherModel* m, const LauncherTheme& th) {
     ImGui::PopStyleColor();
     ImGui::Dummy(ImVec2(0, px(12)));
     const bool pt = ui_language_is_pt();
-    if (ImGui::RadioButton("English##ui_lang_en", !pt) && pt)
+    const char* cur_lang = launcher_i18n_language();
+    const bool es = cur_lang && (std::strcmp(cur_lang, "es") == 0 ||
+                                 std::strcmp(cur_lang, "es-ES") == 0);
+    const bool en = !pt && !es;
+    if (ImGui::RadioButton("English##ui_lang_en", en) && !en)
         launcher_i18n_set_language("en", 1);
     ImGui::Dummy(ImVec2(0, px(6)));
     if (ImGui::RadioButton("Portugu\xC3\xAAs (Brasil)##ui_lang_pt", pt) && !pt)
         launcher_i18n_set_language("pt-BR", 1);
+    ImGui::Dummy(ImVec2(0, px(6)));
+    if (ImGui::RadioButton("Espa\xC3\xB1ol##ui_lang_es", es) && !es)
+        launcher_i18n_set_language("es", 1);
     ImGui::Dummy(ImVec2(0, px(12)));
     ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
     ImGui::TextUnformatted("The choice is saved and applies immediately.");
