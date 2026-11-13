@@ -3932,6 +3932,12 @@ void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
                 shortcut_row(m, th, 0, "Rewind", nullptr, nullptr,
                     "Goes back a few seconds of play.");
         }
+        shortcut_row(m, th, -1, "Quick save", "F2", "Select + R2",
+            "Saves the exact moment in the slot last chosen in the save state menu (slot 1 at first).");
+        shortcut_row(m, th, -1, "Quick load", "F3", "Select + L2",
+            "Loads the slot used by quick save.");
+        shortcut_row(m, th, -1, "Fast-forward speed", "F10 / F11", "Select + Left / Right",
+            "Lowers or raises the fast-forward speed (2x up to MAX). The choice is saved.");
         shortcut_row(m, th, -1, "Options", "F4", "Select + Square",
             "Opens the in-game options menu: aspect ratio, filters, monitor FPS and back to the launcher.");
         shortcut_row(m, th, -1, "Cheats", "F5", "Select + L3",
