@@ -2746,6 +2746,21 @@ ImGui::PopID();
             launcher_model_cycle_screen_kind(m);
     }
 
+    /* Carregar disco na RAM: evita travadas quando o jogo lê o CD (vozes,
+     * músicas, cenários) e o disco do PC demora a responder. */
+    {
+        static int s_preload = -1;
+        if (s_preload < 0) s_preload = recomp_disc_preload_load();
+        row_label("Load disc into RAM", th);
+        bool pre = s_preload != 0;
+        if (ImGui::Checkbox("##preload_disc", &pre)) {
+            s_preload = pre ? 1 : 0;
+            recomp_disc_preload_save(s_preload);
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            ImGui::SetTooltip("%s", ui_text("Reads the whole disc image into memory when the game starts (about 700 MB). Removes stutters when the game reads the CD (voices, music, areas) and your drive is slow or asleep. Startup takes a few seconds longer."));
+    }
+
     /* Filtro de tela (LCD / CRT): só no OpenGL. Gravado em screen_filter.txt,
      * o mesmo que o menu de opções do jogo (F4) usa. */
     if (m->s.renderer) {

@@ -78,6 +78,9 @@ const char* recomp_cheat_note(const RecompCheat* c, int lang);
 #define RECOMP_SCREEN_FILTER_COUNT 5
 int  recomp_screen_filter_load(void);
 void recomp_screen_filter_save(int mode);
+/* "Carregar disco na RAM" (preload_disc.txt ao lado do executável). */
+int  recomp_disc_preload_load(void);
+void recomp_disc_preload_save(int on);
 /* Nome em inglês (o launcher traduz) e em maiúsculas sem acento por idioma
  * (menu do jogo: lang 0 en, 1 pt, 2 es). */
 const char* recomp_screen_filter_name(int mode);
