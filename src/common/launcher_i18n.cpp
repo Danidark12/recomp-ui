@@ -223,6 +223,11 @@ static const LauncherI18nEntry kItalian[] = {
  * e remontado com o modelo em português. Para voltar ao inglês sem recompilar,
  * defina a variável de ambiente RECOMP_UI_LANG=en. */
 static const LauncherI18nEntry kPortugueseBR[] = {
+    {"CD Speed", "Velocidade do CD"},
+    {"Fast Loading (host pacing)", "Carregamento r\xC3\xA1""pido (ritmo do host)"},
+    {"PGXP Precision (geometry + textures)", "Precis\xC3\xA3""o PGXP (geometria + texturas)"},
+    {"PGXP Precision", "Precis\xC3\xA3""o PGXP"},
+    {"Bezel Artwork", "Moldura (bezel)"},
     /* combinações do controle: "Select" é o nome do botão, não traduz */
     {"Select + L1", "Select + L1"},
     {"Select + R1", "Select + R1"},
@@ -347,6 +352,10 @@ static const LauncherI18nEntry kPortugueseBR[] = {
     {"Quick save", "Save r\xC3\xA1""pido"},
     {"Default (60 fps)", "Padr\xC3\xA3""o (60 fps)"},
     {"Screen filter", "Filtro de tela"},
+    {"Opens the in-game options menu: aspect ratio, filters, screen filter, disc change and back to the launcher.",
+     "Abre o menu de op\xC3\xA7""\xC3\xB5""es no jogo: propor\xC3\xA7""\xC3\xA3""o da tela, filtros, filtro de tela, troca de disco e voltar ao launcher."},
+    {"Turns the game's own scanlines on or off (the Scanlines option in Settings).",
+     "Liga ou desliga as scanlines pr\xC3\xB3""prias do jogo (a op\xC3\xA7""\xC3\xA3""o Scanlines das Configura\xC3\xA7""\xC3\xB5""es)."},
     {"None", "Nenhum"},
     {"LCD grid", "LCD (grade)"},
     {"LCD RGB", "LCD RGB"},
@@ -357,7 +366,7 @@ static const LauncherI18nEntry kPortugueseBR[] = {
      "Padr\xC3\xA3""o: os 60 fps originais. Taxa do monitor: acompanha os Hz do seu monitor sozinho. Os outros valores fixam a taxa. A velocidade do jogo nunca muda; os quadros intermedi\xC3\xA1""rios s\xC3\xA3""o misturados."},
     {"Quick load", "Load r\xC3\xA1""pido"},
     {"Fast-forward speed", "Velocidade do avan\xC3\xA7""o r\xC3\xA1""pido"},
-    {"Select + Left / Right", "Select + Esquerda / Direita"},
+    {"Select + Left / Right", "Select + Esq. / Dir."},
     {"Saves the exact moment in the slot last chosen in the save state menu (slot 1 at first).",
      "Salva o momento exato no espa\xC3\xA7""o escolhido por \xC3\xBA""ltimo no menu de save states (no come\xC3\xA7""o, o espa\xC3\xA7""o 1)."},
     {"Loads the slot used by quick save.",
@@ -1946,6 +1955,11 @@ static const LauncherI18nEntry kPortugueseBR[] = {
 
 /* Espanhol: mesmas chaves em inglês da tabela pt-BR. */
 static const LauncherI18nEntry kSpanish[] = {
+    {"CD Speed", "Velocidad del CD"},
+    {"Fast Loading (host pacing)", "Carga r\xC3\xA1""pida (ritmo del host)"},
+    {"PGXP Precision (geometry + textures)", "Precisi\xC3\xB3""n PGXP (geometr\xC3\xAD""a + texturas)"},
+    {"PGXP Precision", "Precisi\xC3\xB3""n PGXP"},
+    {"Bezel Artwork", "Marco (bezel)"},
     /* combinaciones del mando: "Select" es el nombre del botón */
     {"Select + L1", "Select + L1"},
     {"Select + R1", "Select + R1"},
@@ -1965,6 +1979,10 @@ static const LauncherI18nEntry kSpanish[] = {
     {"Volume", "Volumen"},
     {"Cheats", "Trucos"},
     {"Screen filter", "Filtro de pantalla"},
+    {"Opens the in-game options menu: aspect ratio, filters, screen filter, disc change and back to the launcher.",
+     "Abre el men\xC3\xBA"" de opciones en el juego: proporci\xC3\xB3""n, filtros, filtro de pantalla, cambio de disco y volver al launcher."},
+    {"Turns the game's own scanlines on or off (the Scanlines option in Settings).",
+     "Activa o desactiva las scanlines propias del juego (la opci\xC3\xB3""n Scanlines de los Ajustes)."},
     {"None", "Ninguno"},
     {"LCD grid", "LCD (rejilla)"},
     {"LCD RGB", "LCD RGB"},

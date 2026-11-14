@@ -89,6 +89,18 @@ static const char* ui_text(const char* en) {
     return launcher_i18n_text(en);
 }
 
+static const char* ui_display(const char* s);
+
+/* Nome vindo de um manifesto de mod (inglês), traduzido para um buffer do
+ * chamador: o tradutor do idioma ativo (pt-BR pelo hook, espanhol direto). */
+static const char* mod_name_tr(const char* en, char* buf, size_t cap) {
+    if (!en || !en[0]) { if (cap) buf[0] = 0; return buf; }
+    const char* t = ui_text(en);
+    if (t == en || std::strcmp(t, en) == 0) t = ui_display(en);
+    std::snprintf(buf, cap, "%s", t ? t : en);
+    return buf;
+}
+
 /* Texto já traduzido para quem desenha direto no ImDrawList (AddText não passa
  * pelo hook de tradução do ImGui). Devolve a própria string se não houver
  * tradução. O ponteiro é válido até o próximo desenho de texto. */
@@ -3957,7 +3969,9 @@ void draw_launcher_shortcuts(LauncherModel* m, const LauncherTheme& th) {
         shortcut_row(m, th, -1, "Fast-forward speed", "F10 / F11", "Select + Left / Right",
             "Lowers or raises the fast-forward speed (2x up to MAX). The choice is saved.");
         shortcut_row(m, th, -1, "Options", "F4", "Select + Square",
-            "Opens the in-game options menu: aspect ratio, filters, monitor FPS and back to the launcher.");
+            "Opens the in-game options menu: aspect ratio, filters, screen filter, disc change and back to the launcher.");
+        shortcut_row(m, th, -1, "Scanlines", "F6", "-",
+            "Turns the game's own scanlines on or off (the Scanlines option in Settings).");
         shortcut_row(m, th, -1, "Cheats", "F5", "Select + L3",
             "Opens the cheats menu in game to turn cheats on or off (list in the Cheats tab).");
         ImGui::EndTable();
@@ -7801,10 +7815,13 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
                             mod_note_error(m);
                         }
                     }
-                    if (ImGui::IsItemHovered())
+                    if (ImGui::IsItemHovered()) {
+                        char nm[160], verb[48];
                         ImGui::SetTooltip("%s %s",
-                                          enabled ? ui_text("Disable") : ui_text("Enable"),
-                                          feature.name);
+                                          mod_name_tr(enabled ? "Disable" : "Enable",
+                                                      verb, sizeof verb),
+                                          mod_name_tr(feature.name, nm, sizeof nm));
+                    }
                     ImGui::SameLine();
                     if (feature.has_error) {
                         ImGui::TextColored(col(th.warn), "!");
@@ -7824,11 +7841,12 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
                         ImGui::SameLine();
                     }
 
-                    char label[320];
+                    char label[320], nm1[160], nm2[160];
                     std::snprintf(label, sizeof(label), "%s\n%s%s%s",
-                                  feature.name,
-                                  feature.package_name[0] ? feature.package_name
-                                                          : feature.package_id,
+                                  mod_name_tr(feature.name, nm1, sizeof nm1),
+                                  feature.package_name[0]
+                                      ? mod_name_tr(feature.package_name, nm2, sizeof nm2)
+                                      : feature.package_id,
                                   feature.package_version[0] ? "  " : "",
                                   feature.package_version);
                     if (ImGui::Selectable(
@@ -7858,7 +7876,8 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
         RecompLauncherCModFeature feature{};
         if (feature_count > 0 &&
             mods->feature_get(mods->ctx, m->mod_selected, &feature)) {
-            ImGui::TextColored(col(th.accent2), "%s", feature.name);
+            char nmh[160], nmp[160], nmf[48];
+            ImGui::TextColored(col(th.accent2), "%s", mod_name_tr(feature.name, nmh, sizeof nmh));
             if (const char* channel_tag = mod_channel_tag(feature.channel)) {
                 ImGui::SameLine();
                 ImGui::TextColored(col(mod_channel_color(feature.channel, th)),
@@ -7866,11 +7885,11 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
             }
             if (feature.group[0]) {
                 ImGui::SameLine();
-                ImGui::TextColored(col(th.text_muted), "%s", feature.group);
+                ImGui::TextColored(col(th.text_muted), "%s", ui_text(feature.group));
             }
             ImGui::TextColored(
-                col(th.text_muted), "%s %s%s%s", ui_text("From"),
-                feature.package_name[0] ? feature.package_name
+                col(th.text_muted), "%s %s%s%s", mod_name_tr("From", nmf, sizeof nmf),
+                feature.package_name[0] ? mod_name_tr(feature.package_name, nmp, sizeof nmp)
                                         : feature.package_id,
                 feature.package_version[0] ? " " : "",
                 feature.package_version);
