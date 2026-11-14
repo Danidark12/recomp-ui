@@ -3893,25 +3893,40 @@ static void shortcut_row(LauncherModel* m, const LauncherTheme& th, int action,
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(ui_text(title));
     char key[96], pad[96];
+    /* A tecla de verdade dessas ações é o atalho do host (Configurações:
+     * Tab, F7, F8). O bind extra só vale se o jogador definiu um; sem ele, a
+     * coluna Teclado mostra e edita o atalho do host, igual às Configurações. */
+    const int host_hk = action == 2 ? (int)LNG_HK_TURBO
+                      : action == 1 ? (int)LNG_HK_SAVE_STATE_MENU
+                      : action == 0 ? (int)LNG_HK_REWIND : -1;
+    const bool use_host = host_hk >= 0 && m->s.assist_key_bind[action] <= 0;
     if (action >= 0) {
         const int sc = m->s.assist_key_bind[action];
-        snprintf(key, sizeof key, "%s",
-                 sc > 0 ? settings_key_label(sc) : ui_text("(unbound)"));
+        if (use_host)
+            snprintf(key, sizeof key, "%s",
+                     m->hotkeys[host_hk][0] ? m->hotkeys[host_hk] : ui_text("(unbound)"));
+        else
+            snprintf(key, sizeof key, "%s",
+                     sc > 0 ? settings_key_label(sc) : ui_text("(unbound)"));
         shortcut_pad_text(m->s.assist_pad_bind[action], pad, sizeof pad);
     } else {
         snprintf(key, sizeof key, "%s", fixed_key);
         snprintf(pad, sizeof pad, "%s", fixed_pad);
     }
-    const bool cap_key = action >= 0 && m->capturing && m->capture_assist &&
-                         !m->capture_pad && m->capture_btn == action;
+    const bool cap_key = use_host
+        ? (m->hk_capturing && m->capture_hk == (LngHotkey)host_hk)
+        : (action >= 0 && m->capturing && m->capture_assist &&
+           !m->capture_pad && m->capture_btn == action);
     const bool cap_pad = action >= 0 && m->capturing && m->capture_assist &&
                          m->capture_pad && m->capture_btn == action;
     ImGui::TableSetColumnIndex(1);
     if (action < 0) ImGui::BeginDisabled();
     ImGui::PushID("key");
     if (ImGui::Button(cap_key ? ui_text("[ key... ]") : key, ImVec2(-FLT_MIN, 0)) &&
-        action >= 0)
-        launcher_model_begin_assist_capture(m, action, false);
+        action >= 0) {
+        if (use_host) launcher_model_begin_hk_capture(m, (LngHotkey)host_hk);
+        else          launcher_model_begin_assist_capture(m, action, false);
+    }
     ImGui::PopID();
     ImGui::TableSetColumnIndex(2);
     ImGui::PushID("pad");
