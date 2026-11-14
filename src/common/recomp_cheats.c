@@ -283,34 +283,6 @@ void recomp_screen_filter_save(int mode) {
     fclose(f);
 }
 
-static void preload_path(char* out, size_t cap) {
-    const char* cp = recomp_cheats_path();
-    size_t n = strlen(cp);
-    const size_t tail = strlen("cheats.txt");
-    if (n >= tail) n -= tail;
-    snprintf(out, cap, "%.*spreload_disc.txt", (int)n, cp);
-}
-
-int recomp_disc_preload_load(void) {
-    char path[4200];
-    preload_path(path, sizeof(path));
-    FILE* f = open_utf8(path, "rb");
-    if (!f) return 0;
-    int v = 0;
-    if (fscanf(f, "%d", &v) != 1) v = 0;
-    fclose(f);
-    return v ? 1 : 0;
-}
-
-void recomp_disc_preload_save(int on) {
-    char path[4200];
-    preload_path(path, sizeof(path));
-    FILE* f = open_utf8(path, "wb");
-    if (!f) return;
-    fprintf(f, "%d\n", on ? 1 : 0);
-    fclose(f);
-}
-
 const char* recomp_screen_filter_name(int mode) {
     static const char* k[RECOMP_SCREEN_FILTER_COUNT] = {
         "None", "LCD grid", "LCD RGB", "CRT", "Soft CRT" };
