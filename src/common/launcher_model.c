@@ -4,6 +4,7 @@
 // into any game or either prototype backend.
 
 #include "launcher_model.h"
+#include "recomp_cheats.h"
 #include "launcher_system.h"
 
 #include "crc32.h"
@@ -198,6 +199,56 @@ static int lm_disc_index_for_path(const LauncherModel* m, const char* path) {
 // roster image (select that slot) or the player browsed to a replacement for
 // the slot they had selected (record it as that slot's override) — never a
 // silent collapse of an N-disc set to whatever single file was last picked.
+/* ---- Caminhos dos discos lembrados (discs.cfg ao lado do executável) ----
+ * Uma linha por disco localizado: "<número>|<caminho>". Assim o launcher não
+ * pede de novo um disco que o jogador já escolheu uma vez. */
+int launcher_model_autofill_sibling_discs(LauncherModel* m);
+static int lm_path_exists(const char* path);
+
+static void lm_discs_cfg_path(char* out, size_t cap) {
+    const char* cp = recomp_cheats_path();   /* <pasta do exe>/cheats.txt */
+    size_t n = strlen(cp);
+    const size_t tail = strlen("cheats.txt");
+    if (n >= tail) n -= tail;
+    snprintf(out, cap, "%.*sdiscs.cfg", (int)n, cp);
+}
+
+static void lm_discs_save(const LauncherModel* m) {
+    char path[4200];
+    FILE* f;
+    int i;
+    if (!m || m->num_discs < 2) return;
+    lm_discs_cfg_path(path, sizeof(path));
+    f = fopen(path, "wb");
+    if (!f) return;
+    for (i = 0; i < m->num_discs && i < LNG_MAX_DISCS; ++i)
+        if (m->disc_path_override[i][0])
+            fprintf(f, "%d|%s\n", i + 1, m->disc_path_override[i]);
+    fclose(f);
+}
+
+static void lm_discs_load(LauncherModel* m) {
+    char path[4200], line[1200];
+    FILE* f;
+    if (!m || m->num_discs < 2) return;
+    lm_discs_cfg_path(path, sizeof(path));
+    f = fopen(path, "rb");
+    if (!f) return;
+    while (fgets(line, sizeof(line), f)) {
+        char* bar = strchr(line, '|');
+        size_t n;
+        int idx;
+        if (!bar) continue;
+        idx = atoi(line) - 1;
+        if (idx < 0 || idx >= m->num_discs || idx >= LNG_MAX_DISCS) continue;
+        n = strlen(bar + 1);
+        while (n && (bar[1 + n - 1] == '\n' || bar[1 + n - 1] == '\r')) bar[1 + --n] = 0;
+        if (lm_path_exists(bar + 1) && !m->disc_path_override[idx][0])
+            safe_copy(m->disc_path_override[idx], sizeof(m->disc_path_override[idx]), bar + 1);
+    }
+    fclose(f);
+}
+
 static void lm_bind_disc_selection(LauncherModel* m) {
     if (!m || m->num_discs <= 0) {
         if (m) m->disc_selected = -1;
@@ -213,6 +264,10 @@ static void lm_bind_disc_selection(LauncherModel* m) {
                   sizeof(m->disc_path_override[m->disc_selected]), m->rom_full);
     }
     m->s.disc_index = launcher_model_disc_number(m, m->disc_selected);
+    /* Acha sozinho os outros discos na mesma pasta ("Disc 1" -> "Disc 2") e
+     * lembra todos para a próxima vez. */
+    launcher_model_autofill_sibling_discs(m);
+    lm_discs_save(m);
 }
 
 static void run_verify(LauncherModel* m);   // fwd; defined below, called from launcher_model_set_rom
@@ -297,6 +352,7 @@ void launcher_model_init(LauncherModel* m,
                 m->num_discs++;
         }
         if (m->num_discs == 0) m->discs = NULL;
+        lm_discs_load(m);
         m->language_labels      = game->language_labels;
         m->num_languages        = game->num_languages;
         m->disc_verify_cb       = game->disc_verify;      // real disc verdict (PSX), or NULL
@@ -937,6 +993,7 @@ void launcher_model_set_disc_path(LauncherModel* m, int idx, const char* path) {
      * a player filling in disc 3 has not asked to boot disc 3. */
     if (idx == m->disc_selected)
         launcher_model_set_rom(m, launcher_model_disc_path(m, idx));
+    lm_discs_save(m);
 }
 
 const char* launcher_model_disc_suggested_name(const LauncherModel* m, int idx) {
