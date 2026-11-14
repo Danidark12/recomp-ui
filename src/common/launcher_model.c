@@ -771,6 +771,13 @@ void launcher_model_init(LauncherModel* m,
     // Real ROM read + CRC/SHA verification (computes rom_size, crc_match,
     // sha_match). No synthesized/faked facts.
     launcher_model_set_rom(m, initial_rom);
+    /* Discos lembrados (discs.cfg): se nenhum disco veio montado, monta o
+     * disco selecionado que já está localizado, para que "Confirmar" e
+     * "Jogar" não fiquem apagados com 2 de 2 discos encontrados. */
+    if (!m->rom_present && m->num_discs > 0 && m->disc_selected >= 0 &&
+        m->disc_path_override[m->disc_selected][0] &&
+        lm_path_exists(m->disc_path_override[m->disc_selected]))
+        launcher_model_set_rom(m, m->disc_path_override[m->disc_selected]);
 
     // Password/mantra save: read the current one-line password file so the
     // SAVES row can show it. (Zapper switch state is loaded later by
