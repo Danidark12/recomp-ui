@@ -22,6 +22,7 @@
 #include "launcher_system.h"
 #include "launcher_i18n.h"
 #include "recomp_cheats.h"
+#include "recomp_bezel_preview.h"
 #include "consoles/n64/n64_binds.h"   // RUI_N64_FIELD_* for the pad-capture path
 
 #include "launcher_sdlcompat.h"   // pulls the right SDL header + event shim
@@ -7717,6 +7718,117 @@ static void draw_mod_catalog_diagnostics(LauncherModel* m,
     ImGui::Spacing();
 }
 
+std::string asset(const char* rel);
+
+// ---- Image resource previews (frame / bezel artwork) -----------------------
+// Thumbnails are cached per file (path + mtime + size). A frame ("bezel")
+// resource is shown as it looks in game: the frame with a sample game picture
+// (assets/frame_preview_sample.png, optional) in the middle.
+struct ResourceThumb {
+    LauncherTexture tex{};
+    long long stamp = -1;
+    bool failed = false;
+};
+static std::unordered_map<std::string, ResourceThumb> s_resource_thumbs;
+
+static long long resource_file_stamp(const std::string& path) {
+    std::error_code ec;
+    const std::filesystem::path p = std::filesystem::u8path(path);
+    const auto size = std::filesystem::file_size(p, ec);
+    if (ec) return -1;
+    const auto t = std::filesystem::last_write_time(p, ec);
+    if (ec) return -1;
+    const unsigned long long mix =
+        (unsigned long long)t.time_since_epoch().count() ^ ((unsigned long long)size << 20);
+    return (long long)(mix & 0x7FFFFFFFFFFFFFFFull);   // -1 stays "missing"
+}
+
+static bool resource_is_image_path(const std::string& path) {
+    std::string ext = std::filesystem::u8path(path).extension().u8string();
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp";
+}
+
+static const LauncherTexture* resource_thumb(const std::string& path, bool frame) {
+    const std::string key = (frame ? "F|" : "I|") + path;
+    const long long stamp = resource_file_stamp(path);
+    ResourceThumb& t = s_resource_thumbs[key];
+    if (t.stamp == stamp && (t.tex.id || t.failed))
+        return t.tex.id ? &t.tex : nullptr;
+    launcher_texture_free(&t.tex);
+    t.stamp = stamp;
+    t.failed = true;
+    if (stamp < 0) return nullptr;
+    int w = 0, h = 0;
+    unsigned char* px = launcher_image_load_rgba(path.c_str(), &w, &h);
+    if (!px) return nullptr;
+    int sw = 0, sh = 0;
+    unsigned char* sample = frame
+        ? launcher_image_load_rgba(asset("assets/frame_preview_sample.png").c_str(), &sw, &sh)
+        : nullptr;
+    int ow = 0, oh = 0;
+    unsigned char* thumb = frame
+        ? recomp_bezel_preview_compose(px, w, h, sample, sw, sh, 480, 240, &ow, &oh)
+        : nullptr;
+    if (thumb) {
+        t.tex = launcher_texture_from_rgba(thumb, ow, oh);
+        recomp_bezel_preview_free(thumb);
+    } else if (!frame) {
+        t.tex = launcher_texture_from_rgba(px, w, h);
+    }
+    if (sample) launcher_image_free(sample);
+    launcher_image_free(px);
+    t.failed = t.tex.id == 0;
+    return t.tex.id ? &t.tex : nullptr;
+}
+
+// Images a frame can be picked from: the folder of the current file, the
+// "molduras" folders and the game folder (same list the in-game menu cycles).
+static std::vector<std::string> s_frame_gallery;
+static double s_frame_gallery_time = -10.0;
+static std::string s_frame_gallery_for;
+
+static const std::vector<std::string>& frame_gallery(const std::string& current) {
+    const double now = ImGui::GetTime();
+    if (current == s_frame_gallery_for && now - s_frame_gallery_time < 2.0)
+        return s_frame_gallery;
+    s_frame_gallery_for = current;
+    s_frame_gallery_time = now;
+    s_frame_gallery.clear();
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    std::vector<fs::path> dirs;
+    if (!current.empty()) dirs.push_back(fs::u8path(current).parent_path());
+    const fs::path exe = fs::u8path(asset(""));
+    dirs.push_back(fs::current_path(ec) / "molduras");
+    dirs.push_back(exe / "molduras");
+    dirs.push_back(fs::current_path(ec));
+    dirs.push_back(exe);
+    std::vector<fs::path> seen;
+    for (const fs::path& d : dirs) {
+        if (d.empty()) continue;
+        const fs::path canon = fs::weakly_canonical(d, ec);
+        if (std::find(seen.begin(), seen.end(), canon) != seen.end()) continue;
+        seen.push_back(canon);
+        std::vector<std::string> here;
+        for (fs::directory_iterator it(d, ec), end; !ec && it != end; it.increment(ec)) {
+            if (!it->is_regular_file(ec)) continue;
+            const std::string p = it->path().u8string();
+            if (resource_is_image_path(p)) here.push_back(p);
+        }
+        std::sort(here.begin(), here.end());
+        s_frame_gallery.insert(s_frame_gallery.end(), here.begin(), here.end());
+    }
+    return s_frame_gallery;
+}
+
+static bool same_file(const std::string& a, const std::string& b) {
+    if (a.empty() || b.empty()) return false;
+    std::error_code ec;
+    return std::filesystem::equivalent(std::filesystem::u8path(a),
+                                       std::filesystem::u8path(b), ec);
+}
+
 static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
     const auto* mods = m ? m->mods : nullptr;
     if (!mods || !mods->feature_count || !mods->feature_get ||
@@ -7985,6 +8097,21 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
                         const bool directory_resource =
                             std::strcmp(resource.format, "directory") == 0 ||
                             std::strcmp(resource.format, "folder") == 0;
+                        const bool image_resource = !directory_resource &&
+                            (std::strstr(resource.file_patterns, ".png") ||
+                             std::strstr(resource.file_patterns, ".jpg"));
+                        const bool frame_resource = image_resource &&
+                            std::strcmp(feature.id, "bezel") == 0;
+                        if (image_resource && resource.path[0]) {
+                            if (const LauncherTexture* tex =
+                                    resource_thumb(resource.path, frame_resource)) {
+                                const float avail = ImGui::GetContentRegionAvail().x;
+                                float tw = avail < 360.0f ? avail : 360.0f;
+                                float thh = tw * (float)tex->h / (float)tex->w;
+                                if (thh > 200.0f) { thh = 200.0f; tw = thh * (float)tex->w / (float)tex->h; }
+                                ImGui::Image((ImTextureID)(intptr_t)tex->id, ImVec2(tw, thh));
+                            }
+                        }
                         if (ImGui::Button(
                                 resource.path[0]
                                     ? (directory_resource ? ui_text("Change folder")
@@ -8030,6 +8157,54 @@ static void draw_mod_features(LauncherModel* m, const LauncherTheme& th) {
                                         sizeof(m->mod_status),
                                         "%s verified. Changes apply on PLAY.",
                                         resource.label);
+                                }
+                            }
+                        }
+                        if (frame_resource) {
+                            const std::vector<std::string>& gallery =
+                                frame_gallery(resource.path);
+                            if (!gallery.empty()) {
+                                ImGui::Spacing();
+                                ImGui::TextColored(col(th.text_muted), "%s",
+                                    ui_text("Frames in the game and molduras folders (click to use):"));
+                                const float cell_w = 150.0f;
+                                const float full = ImGui::GetContentRegionAvail().x;
+                                int per_row = (int)(full / (cell_w + 8.0f));
+                                if (per_row < 1) per_row = 1;
+                                for (size_t gi = 0; gi < gallery.size(); ++gi) {
+                                    const std::string& gp = gallery[gi];
+                                    const LauncherTexture* gt = resource_thumb(gp, true);
+                                    if (!gt) continue;
+                                    ImGui::PushID((int)gi);
+                                    if (gi % (size_t)per_row != 0) ImGui::SameLine();
+                                    const bool current = same_file(gp, resource.path);
+                                    const float gh = cell_w * (float)gt->h / (float)gt->w;
+                                    ImGui::BeginGroup();
+                                    if (current)
+                                        ImGui::PushStyleColor(ImGuiCol_Button, col(th.accent));
+                                    const bool clicked = ImGui::ImageButton(
+                                        "frame", (ImTextureID)(intptr_t)gt->id,
+                                        ImVec2(cell_w, gh));
+                                    if (current) ImGui::PopStyleColor();
+                                    std::string name = std::filesystem::u8path(gp).stem().u8string();
+                                    if (name.size() > 22) name = name.substr(0, 21) + "~";
+                                    ImGui::TextColored(current ? col(th.accent) : col(th.text_muted),
+                                                       "%s", name.c_str());
+                                    ImGui::EndGroup();
+                                    if (ImGui::IsItemHovered())
+                                        ImGui::SetTooltip("%s", gp.c_str());
+                                    if (clicked && !current) {
+                                        if (!mods->feature_resource_set_path(
+                                                mods->ctx, feature.package_id,
+                                                feature.id, resource.id, gp.c_str())) {
+                                            mod_note_error(m);
+                                        } else {
+                                            std::snprintf(m->mod_status, sizeof(m->mod_status),
+                                                          "%s verified. Changes apply on PLAY.",
+                                                          resource.label);
+                                        }
+                                    }
+                                    ImGui::PopID();
                                 }
                             }
                         }

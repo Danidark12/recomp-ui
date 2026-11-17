@@ -32,6 +32,9 @@ LauncherTexture launcher_texture_load_colorkey(const char* path, int tolerance);
 
 void launcher_texture_free(LauncherTexture* t);
 
+// Upload an RGBA8 buffer the caller already holds (linear filtered, clamped).
+LauncherTexture launcher_texture_from_rgba(const unsigned char* rgba, int w, int h);
+
 // Decode an image file to a tightly-packed RGBA8 buffer, WITHOUT touching GL.
 // For the one consumer that needs pixels rather than a texture: the window /
 // taskbar icon, which SDL wants as a surface. Returns NULL on failure; on
