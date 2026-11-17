@@ -23,11 +23,11 @@ unsigned char* recomp_filter_preview_render(const unsigned char* src, int sw, in
 void recomp_filter_preview_free(unsigned char* pixels);
 
 // The crop used for the bundled sample (assets/frame_preview_sample.png:
-// Lenneth at a save point, 320x224).
-#define RECOMP_FILTER_PREVIEW_CROP_X 130
+// Lenneth on Asgard Hill, 320x224).
+#define RECOMP_FILTER_PREVIEW_CROP_X 118
 #define RECOMP_FILTER_PREVIEW_CROP_Y 122
-#define RECOMP_FILTER_PREVIEW_CROP_W 60
-#define RECOMP_FILTER_PREVIEW_CROP_H 52
+#define RECOMP_FILTER_PREVIEW_CROP_W 72
+#define RECOMP_FILTER_PREVIEW_CROP_H 66
 
 #ifdef __cplusplus
 }
