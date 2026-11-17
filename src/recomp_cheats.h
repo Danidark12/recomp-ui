@@ -75,7 +75,7 @@ const char* recomp_cheat_note(const RecompCheat* c, int lang);
 /* Filtro de tela (0 nenhum, 1 LCD, 2 LCD RGB, 3 CRT, 4 CRT suave), guardado em
  * screen_filter.txt ao lado do executável. Compartilhado entre o launcher e o
  * menu de opções do jogo. */
-#define RECOMP_SCREEN_FILTER_COUNT 5
+#define RECOMP_SCREEN_FILTER_COUNT 10
 int  recomp_screen_filter_load(void);
 void recomp_screen_filter_save(int mode);
 /* Nome em inglês (o launcher traduz) e em maiúsculas sem acento por idioma

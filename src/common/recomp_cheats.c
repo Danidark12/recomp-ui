@@ -285,17 +285,21 @@ void recomp_screen_filter_save(int mode) {
 
 const char* recomp_screen_filter_name(int mode) {
     static const char* k[RECOMP_SCREEN_FILTER_COUNT] = {
-        "None", "LCD grid", "LCD RGB", "CRT", "Soft CRT" };
+        "None", "LCD grid", "LCD RGB", "CRT", "Soft CRT",
+        "Sharp pixels", "Scale2x", "Scale3x", "xBR", "Dots" };
     return (mode >= 0 && mode < RECOMP_SCREEN_FILTER_COUNT) ? k[mode] : k[0];
 }
 
 const char* recomp_screen_filter_name_upper(int mode, int lang) {
     static const char* en[RECOMP_SCREEN_FILTER_COUNT] = {
-        "NONE", "LCD GRID", "LCD RGB", "CRT", "SOFT CRT" };
+        "NONE", "LCD GRID", "LCD RGB", "CRT", "SOFT CRT",
+        "SHARP PIXELS", "SCALE2X", "SCALE3X", "XBR", "DOTS" };
     static const char* pt[RECOMP_SCREEN_FILTER_COUNT] = {
-        "NENHUM", "LCD (GRADE)", "LCD RGB", "CRT", "CRT SUAVE" };
+        "NENHUM", "LCD (GRADE)", "LCD RGB", "CRT", "CRT SUAVE",
+        "PIXELS NITIDOS", "SCALE2X", "SCALE3X", "XBR", "PONTOS" };
     static const char* es[RECOMP_SCREEN_FILTER_COUNT] = {
-        "NINGUNO", "LCD (REJILLA)", "LCD RGB", "CRT", "CRT SUAVE" };
+        "NINGUNO", "LCD (REJILLA)", "LCD RGB", "CRT", "CRT SUAVE",
+        "PIXELES NITIDOS", "SCALE2X", "SCALE3X", "XBR", "PUNTOS" };
     if (mode < 0 || mode >= RECOMP_SCREEN_FILTER_COUNT) mode = 0;
     return lang == 1 ? pt[mode] : lang == 2 ? es[mode] : en[mode];
 }

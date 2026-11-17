@@ -2765,12 +2765,20 @@ ImGui::PopID();
         static int s_filter = -1;
         if (s_filter < 0) s_filter = recomp_screen_filter_load();
         row_label("Screen filter", th);
-        if (ImGui::Button(ui_text(recomp_screen_filter_name(s_filter)), ImVec2(px(170), px(30)))) {
-            s_filter = (s_filter + 1) % RECOMP_SCREEN_FILTER_COUNT;
-            recomp_screen_filter_save(s_filter);
+        ImGui::SetNextItemWidth(px(170));
+        if (ImGui::BeginCombo("##screen_filter", ui_text(recomp_screen_filter_name(s_filter)))) {
+            for (int f = 0; f < RECOMP_SCREEN_FILTER_COUNT; ++f) {
+                const bool sel = (f == s_filter);
+                if (ImGui::Selectable(ui_text(recomp_screen_filter_name(f)), sel)) {
+                    s_filter = f;
+                    recomp_screen_filter_save(s_filter);
+                }
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-            ImGui::SetTooltip("%s", ui_text("LCD grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Works best at 3x window size or larger; also in the in-game Options menu (F4)."));
+            ImGui::SetTooltip("%s", ui_text("LCD grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Sharp pixels: clean pixels, all the same size at any window size. Scale2x / Scale3x: round off jagged diagonals and keep the pixel look. xBR: smooth, hand-drawn edges. Dots: each pixel becomes a round dot. All of them combine with Scanlines and are also in the in-game Options menu (F4)."));
     }
 
     // Frame interpolation is only meaningful under OpenGL (Software has no
