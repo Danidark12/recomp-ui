@@ -263,45 +263,90 @@ static void screen_filter_path(char* out, size_t cap) {
     snprintf(out, cap, "%.*sscreen_filter.txt", (int)n, cp);
 }
 
-int recomp_screen_filter_load(void) {
+/* Lê as duas etapas. Aceita o formato antigo de uma linha, inclusive os
+ * valores 5..9 do build que ainda tinha tudo numa lista só
+ * (5 Sharp Bilinear, 6 Scale2x, 7 Scale3x, 8 xBR, 9 Dot Matrix). */
+static void screen_filters_read(int* filter, int* upscale) {
     char path[4200];
     screen_filter_path(path, sizeof(path));
+    *filter = 0;
+    *upscale = 0;
     FILE* f = open_utf8(path, "rb");
-    if (!f) return 0;
-    int v = 0;
-    if (fscanf(f, "%d", &v) != 1) v = 0;
+    if (!f) return;
+    int a = 0, b = -1;
+    if (fscanf(f, "%d", &a) != 1) a = 0;
+    if (fscanf(f, "%d", &b) != 1) b = -1;
     fclose(f);
-    return (v >= 0 && v < RECOMP_SCREEN_FILTER_COUNT) ? v : 0;
+    if (b < 0) {
+        if (a >= 5 && a <= 8) { b = a - 4; a = 0; }
+        else if (a == 9)      { b = 0;     a = 5; }
+        else                    b = 0;
+    }
+    *filter  = (a >= 0 && a < RECOMP_SCREEN_FILTER_COUNT) ? a : 0;
+    *upscale = (b >= 0 && b < RECOMP_UPSCALE_FILTER_COUNT) ? b : 0;
 }
 
-void recomp_screen_filter_save(int mode) {
+static void screen_filters_write(int filter, int upscale) {
     char path[4200];
     screen_filter_path(path, sizeof(path));
     FILE* f = open_utf8(path, "wb");
     if (!f) return;
-    fprintf(f, "%d\n", (mode >= 0 && mode < RECOMP_SCREEN_FILTER_COUNT) ? mode : 0);
+    fprintf(f, "%d\n%d\n",
+            (filter >= 0 && filter < RECOMP_SCREEN_FILTER_COUNT) ? filter : 0,
+            (upscale >= 0 && upscale < RECOMP_UPSCALE_FILTER_COUNT) ? upscale : 0);
     fclose(f);
+}
+
+int recomp_screen_filter_load(void) {
+    int f, u;
+    screen_filters_read(&f, &u);
+    return f;
+}
+
+void recomp_screen_filter_save(int mode) {
+    int f, u;
+    screen_filters_read(&f, &u);
+    screen_filters_write(mode, u);
+}
+
+int recomp_upscale_filter_load(void) {
+    int f, u;
+    screen_filters_read(&f, &u);
+    return u;
+}
+
+void recomp_upscale_filter_save(int mode) {
+    int f, u;
+    screen_filters_read(&f, &u);
+    screen_filters_write(f, mode);
 }
 
 const char* recomp_screen_filter_name(int mode) {
     static const char* k[RECOMP_SCREEN_FILTER_COUNT] = {
-        "None", "LCD grid", "LCD RGB", "CRT", "Soft CRT",
-        "Sharp pixels", "Scale2x", "Scale3x", "xBR", "Dots" };
+        "None", "LCD Grid", "LCD RGB", "CRT", "Soft CRT", "Dot Matrix" };
     return (mode >= 0 && mode < RECOMP_SCREEN_FILTER_COUNT) ? k[mode] : k[0];
 }
 
 const char* recomp_screen_filter_name_upper(int mode, int lang) {
-    static const char* en[RECOMP_SCREEN_FILTER_COUNT] = {
-        "NONE", "LCD GRID", "LCD RGB", "CRT", "SOFT CRT",
-        "SHARP PIXELS", "SCALE2X", "SCALE3X", "XBR", "DOTS" };
-    static const char* pt[RECOMP_SCREEN_FILTER_COUNT] = {
-        "NENHUM", "LCD (GRADE)", "LCD RGB", "CRT", "CRT SUAVE",
-        "PIXELS NITIDOS", "SCALE2X", "SCALE3X", "XBR", "PONTOS" };
-    static const char* es[RECOMP_SCREEN_FILTER_COUNT] = {
-        "NINGUNO", "LCD (REJILLA)", "LCD RGB", "CRT", "CRT SUAVE",
-        "PIXELES NITIDOS", "SCALE2X", "SCALE3X", "XBR", "PUNTOS" };
-    if (mode < 0 || mode >= RECOMP_SCREEN_FILTER_COUNT) mode = 0;
-    return lang == 1 ? pt[mode] : lang == 2 ? es[mode] : en[mode];
+    static const char* k[RECOMP_SCREEN_FILTER_COUNT] = {
+        "NONE", "LCD GRID", "LCD RGB", "CRT", "SOFT CRT", "DOT MATRIX" };
+    if (mode <= 0 || mode >= RECOMP_SCREEN_FILTER_COUNT)
+        return lang == 1 ? "NENHUM" : lang == 2 ? "NINGUNO" : "NONE";
+    return k[mode];
+}
+
+const char* recomp_upscale_filter_name(int mode) {
+    static const char* k[RECOMP_UPSCALE_FILTER_COUNT] = {
+        "None", "Sharp Bilinear", "Scale2x", "Scale3x", "xBR" };
+    return (mode >= 0 && mode < RECOMP_UPSCALE_FILTER_COUNT) ? k[mode] : k[0];
+}
+
+const char* recomp_upscale_filter_name_upper(int mode, int lang) {
+    static const char* k[RECOMP_UPSCALE_FILTER_COUNT] = {
+        "NONE", "SHARP BILINEAR", "SCALE2X", "SCALE3X", "XBR" };
+    if (mode <= 0 || mode >= RECOMP_UPSCALE_FILTER_COUNT)
+        return lang == 1 ? "NENHUM" : lang == 2 ? "NINGUNO" : "NONE";
+    return k[mode];
 }
 
 const char* recomp_cheat_name(const RecompCheat* c, int lang) {

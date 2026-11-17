@@ -163,6 +163,7 @@ function(recomp_target_launcher_ui TGT)
         ${RUI_SRC}/common/launcher_i18n.cpp
         ${RUI_SRC}/common/recomp_cheats.c   # cheats.txt (GameShark) compartilhado launcher/runtime
         ${RUI_SRC}/common/recomp_bezel_preview.c # frame thumbnails (launcher + in-game menu)
+        ${RUI_SRC}/common/recomp_filter_preview.c # screen filter previews (launcher + in-game menu)
         ${RUI_SRC}/third_party/tinyfiledialogs.c
         # console-specific helpers (src/consoles/<id>/) — always compiled, only
         # reached when the active SystemProfile opts into the capability

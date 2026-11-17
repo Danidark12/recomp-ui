@@ -23,6 +23,7 @@
 #include "launcher_i18n.h"
 #include "recomp_cheats.h"
 #include "recomp_bezel_preview.h"
+#include "recomp_filter_preview.h"
 #include "consoles/n64/n64_binds.h"   // RUI_N64_FIELD_* for the pad-capture path
 
 #include "launcher_sdlcompat.h"   // pulls the right SDL header + event shim
@@ -217,6 +218,7 @@ LauncherTexture g_cart[5];
 // VerifyResult.verdict (0 none,1 ok,2 warn,3 bad); see draw_verdict_block().
 LauncherTexture g_verdict_ok, g_verdict_warn, g_verdict_bad, g_verdict_none;
 ImTextureID tid(const LauncherTexture& t) { return (ImTextureID)(intptr_t)t.id; }
+std::string asset(const char* rel);   // defined near the end of this namespace
 
 LauncherPad g_pads[LNG_MAX_PADS];   // live gamepad list (repolled every frame)
 int         g_pad_count = 0;
@@ -2759,17 +2761,42 @@ ImGui::PopID();
             launcher_model_cycle_screen_kind(m);
     }
 
-    /* Filtro de tela (LCD / CRT): só no OpenGL. Gravado em screen_filter.txt,
-     * o mesmo que o menu de opções do jogo (F4) usa. */
+    /* Filtros de tela: upscaler + filtro de tela (máscara), combináveis entre
+     * si e com as scanlines. Só no OpenGL. Gravados em screen_filter.txt, o
+     * mesmo arquivo que o menu de opções do jogo (F4) usa. Nomes originais em
+     * inglês; a prévia mostra a combinação numa cena do jogo. */
     if (m->s.renderer) {
-        static int s_filter = -1;
+        static int s_filter = -1, s_upscale = -1;
         if (s_filter < 0) s_filter = recomp_screen_filter_load();
+        if (s_upscale < 0) s_upscale = recomp_upscale_filter_load();
+        auto filter_name = [](const char* n, int idx) {
+            return idx == 0 ? ui_text("None") : n;
+        };
+
+        row_label("Upscaler", th);
+        ImGui::SetNextItemWidth(px(170));
+        if (ImGui::BeginCombo("##upscale_filter",
+                              filter_name(recomp_upscale_filter_name(s_upscale), s_upscale))) {
+            for (int f = 0; f < RECOMP_UPSCALE_FILTER_COUNT; ++f) {
+                const bool sel = (f == s_upscale);
+                if (ImGui::Selectable(filter_name(recomp_upscale_filter_name(f), f), sel)) {
+                    s_upscale = f;
+                    recomp_upscale_filter_save(s_upscale);
+                }
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            ImGui::SetTooltip("%s", ui_text("Sharp Bilinear: clean pixels, all the same size at any window size. Scale2x / Scale3x: round off jagged diagonals and keep the pixel look. xBR: smooth, hand-drawn edges. Combines with the screen filter and Scanlines; also in the in-game Options menu (F4)."));
+
         row_label("Screen filter", th);
         ImGui::SetNextItemWidth(px(170));
-        if (ImGui::BeginCombo("##screen_filter", ui_text(recomp_screen_filter_name(s_filter)))) {
+        if (ImGui::BeginCombo("##screen_filter",
+                              filter_name(recomp_screen_filter_name(s_filter), s_filter))) {
             for (int f = 0; f < RECOMP_SCREEN_FILTER_COUNT; ++f) {
                 const bool sel = (f == s_filter);
-                if (ImGui::Selectable(ui_text(recomp_screen_filter_name(f)), sel)) {
+                if (ImGui::Selectable(filter_name(recomp_screen_filter_name(f), f), sel)) {
                     s_filter = f;
                     recomp_screen_filter_save(s_filter);
                 }
@@ -2778,7 +2805,39 @@ ImGui::PopID();
             ImGui::EndCombo();
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
-            ImGui::SetTooltip("%s", ui_text("LCD grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Sharp pixels: clean pixels, all the same size at any window size. Scale2x / Scale3x: round off jagged diagonals and keep the pixel look. xBR: smooth, hand-drawn edges. Dots: each pixel becomes a round dot. All of them combine with Scanlines and are also in the in-game Options menu (F4)."));
+            ImGui::SetTooltip("%s", ui_text("LCD Grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Dot Matrix: each pixel becomes a round dot. Drawn over the upscaler; works best with a large window or full screen."));
+
+        // Prévia: a combinação atual num recorte ampliado da cena de exemplo.
+        static LauncherTexture s_prev_tex{};
+        static int s_prev_key = -1;
+        static unsigned char* s_prev_sample = nullptr;
+        static int s_prev_sw = 0, s_prev_sh = 0, s_prev_tried = 0;
+        if (!s_prev_tried) {
+            s_prev_tried = 1;
+            s_prev_sample = launcher_image_load_rgba(
+                asset("assets/frame_preview_sample.png").c_str(), &s_prev_sw, &s_prev_sh);
+        }
+        const int key = s_upscale * 16 + s_filter;
+        if (s_prev_sample && key != s_prev_key) {
+            s_prev_key = key;
+            launcher_texture_free(&s_prev_tex);
+            int ow = 0, oh = 0;
+            unsigned char* img = recomp_filter_preview_render(
+                s_prev_sample, s_prev_sw, s_prev_sh,
+                RECOMP_FILTER_PREVIEW_CROP_X, RECOMP_FILTER_PREVIEW_CROP_Y,
+                RECOMP_FILTER_PREVIEW_CROP_W, RECOMP_FILTER_PREVIEW_CROP_H,
+                4, s_upscale, s_filter, 0, 0.0f, &ow, &oh);
+            if (img) {
+                s_prev_tex = launcher_texture_from_rgba(img, ow, oh);
+                recomp_filter_preview_free(img);
+            }
+        }
+        if (s_prev_tex.id) {
+            row_label("Preview", th);
+            ImGui::Image(tid(s_prev_tex), ImVec2((float)s_prev_tex.w, (float)s_prev_tex.h));
+            ImGui::TextColored(col(th.text_muted), "%s",
+                               ui_text("Scanlines, when on, are added on top."));
+        }
     }
 
     // Frame interpolation is only meaningful under OpenGL (Software has no
@@ -7725,8 +7784,6 @@ static void draw_mod_catalog_diagnostics(LauncherModel* m,
     ImGui::Separator();
     ImGui::Spacing();
 }
-
-std::string asset(const char* rel);
 
 // ---- Image resource previews (frame / bezel artwork) -----------------------
 // Thumbnails are cached per file (path + mtime + size). A frame ("bezel")

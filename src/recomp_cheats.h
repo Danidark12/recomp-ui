@@ -72,16 +72,24 @@ int recomp_cheat_lang_from_code(const char* code);
 const char* recomp_cheat_name(const RecompCheat* c, int lang);
 const char* recomp_cheat_note(const RecompCheat* c, int lang);
 
-/* Filtro de tela (0 nenhum, 1 LCD, 2 LCD RGB, 3 CRT, 4 CRT suave), guardado em
- * screen_filter.txt ao lado do executável. Compartilhado entre o launcher e o
- * menu de opções do jogo. */
-#define RECOMP_SCREEN_FILTER_COUNT 10
+/* Filtros de tela, em duas etapas que se combinam (e com as scanlines):
+ *   filtro de tela / máscara: 0 None, 1 LCD Grid, 2 LCD RGB, 3 CRT,
+ *     4 Soft CRT, 5 Dot Matrix;
+ *   upscaler: 0 None, 1 Sharp Bilinear, 2 Scale2x, 3 Scale3x, 4 xBR.
+ * Guardados em screen_filter.txt ao lado do executável (linha 1 = filtro,
+ * linha 2 = upscaler), compartilhado entre o launcher e o menu F4. */
+#define RECOMP_SCREEN_FILTER_COUNT 6
+#define RECOMP_UPSCALE_FILTER_COUNT 5
 int  recomp_screen_filter_load(void);
 void recomp_screen_filter_save(int mode);
-/* Nome em inglês (o launcher traduz) e em maiúsculas sem acento por idioma
- * (menu do jogo: lang 0 en, 1 pt, 2 es). */
+int  recomp_upscale_filter_load(void);
+void recomp_upscale_filter_save(int mode);
+/* Nomes originais, em inglês, em todos os idiomas; só "nenhum" é traduzido.
+ * _upper: maiúsculas sem acento para o menu do jogo (lang 0 en, 1 pt, 2 es). */
 const char* recomp_screen_filter_name(int mode);
 const char* recomp_screen_filter_name_upper(int mode, int lang);
+const char* recomp_upscale_filter_name(int mode);
+const char* recomp_upscale_filter_name_upper(int mode, int lang);
 
 /* 1 se o tipo de código (byte alto da palavra de endereço) é suportado. */
 int recomp_cheat_code_type_supported(uint32_t addr_word);
