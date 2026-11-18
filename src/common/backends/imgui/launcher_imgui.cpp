@@ -2697,11 +2697,6 @@ ImGui::PopID();
             launcher_model_cycle_aa(m);
         ImGui::PopID();
     }
-    // Prévia de Nearest/Bilinear e da suavização. No Software só o
-    // Antialiasing vale (filtro de textura, upscaler e filtro de tela são do
-    // OpenGL), e a prévia mostra exatamente isso.
-    if (m->has_texture_filter || m->has_antialiasing)
-        draw_filter_preview(m, th, -1, -1);
 
     /* FMV reconstruction. Distinct from Texture filtering above: that samples
      * the rasterizer's textures, this scales a decoded video frame up to the
@@ -2765,7 +2760,15 @@ ImGui::PopID();
         // shorter models (e.g. "DMG") center within the same fixed box.
         if (ImGui::Button(ui_text(launcher_model_screen_kind_label(m)), ImVec2(px(220), px(30))))
             launcher_model_cycle_screen_kind(m);
+        if (!m->s.renderer && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            ImGui::SetTooltip("%s", ui_text("Colours of a TV of the era. Raw: the PS1's own colours. CRT: tube TV. Composite: tube TV over the yellow cable, softer with greyer blacks. Trinitron: cleaner colours and deep blacks."));
     }
+
+    // Prévia de Filtragem de texturas, Antialiasing e Modelo de tela (no
+    // Software só o Antialiasing e o Modelo de tela valem; o resto é do
+    // OpenGL, e a prévia mostra exatamente isso).
+    if (m->has_texture_filter || m->has_antialiasing || m->has_screen_kind)
+        draw_filter_preview(m, th, -1, -1);
 
     /* Filtros de tela: upscaler + filtro de tela (máscara), combináveis entre
      * si e com as scanlines. Só no OpenGL. Gravados em screen_filter.txt, o
@@ -2773,8 +2776,9 @@ ImGui::PopID();
      * inglês; a prévia mostra a combinação numa cena do jogo. */
     if (!m->s.renderer) {
         row_label("Upscaler", th);
-        ImGui::TextColored(col(th.text_muted), "%s",
-            ui_text("Upscaler, Screen filter and Frames need the OpenGL renderer."));
+        ImGui::PushStyleColor(ImGuiCol_Text, col(th.text_muted));
+        ImGui::TextWrapped("%s", ui_text("Upscaler, Screen filter and Frames need the OpenGL renderer."));
+        ImGui::PopStyleColor();
     }
     if (m->s.renderer) {
         static int s_filter = -1, s_upscale = -1;
@@ -2818,9 +2822,21 @@ ImGui::PopID();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
             ImGui::SetTooltip("%s", ui_text("LCD Grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Dot Matrix: each pixel becomes a round dot. Drawn over the upscaler; works best with a large window or full screen."));
 
+        row_label("Scanlines", th);
+        {
+            bool sl = m->s.scanlines != 0;
+            if (ImGui::Checkbox("##scanlines", &sl)) m->s.scanlines = sl ? 1 : 0;
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+                ImGui::SetTooltip("%s", ui_text("Dark lines between the picture's rows, like a CRT TV. Combines with the upscaler and screen filter; also in the in-game Options menu (F4)."));
+            if (m->s.scanlines) {
+                ImGui::SameLine();
+                int pct = m->s.scanline_strength_pct < 0 ? 50 : m->s.scanline_strength_pct;
+                ImGui::SetNextItemWidth(px(140));
+                if (ImGui::SliderInt("##scan_strength", &pct, 10, 100, "%d%%"))
+                    m->s.scanline_strength_pct = pct;
+            }
+        }
         draw_filter_preview(m, th, s_upscale, s_filter);
-        ImGui::TextColored(col(th.text_muted), "%s",
-                           ui_text("Scanlines, when on, are added on top."));
     }
 
     // Frame interpolation is only meaningful under OpenGL (Software has no
@@ -7781,30 +7797,42 @@ static void draw_filter_preview(LauncherModel* m, const LauncherTheme& th,
         s_prev_sample = launcher_image_load_rgba(
             asset("assets/frame_preview_sample.png").c_str(), &s_prev_sw, &s_prev_sh);
     }
+    // One texture per call site (the page shows two previews).
+    static LauncherTexture s_tex2{};
+    static int s_key2 = -1;
+    const bool second = upscale >= 0;
     const bool gl = m->s.renderer != 0;
     if (upscale < 0) upscale = recomp_upscale_filter_load();
     if (filter < 0) filter = recomp_screen_filter_load();
     if (!gl) upscale = filter = 0;
     const int smooth = ((gl && m->has_texture_filter && m->s.texture_filter) ? 1 : 0) +
                        ((m->has_antialiasing && m->s.antialiasing) ? 1 : 0);
-    const int key = upscale * 64 + filter * 4 + smooth;
-    if (s_prev_sample && key != s_prev_key) {
-        s_prev_key = key;
-        launcher_texture_free(&s_prev_tex);
+    const int kind = (!gl && m->has_screen_kind) ? m->s.screen_kind : 0;
+    const int scan = (gl && m->s.scanlines) ? 1 : 0;
+    const int pct = m->s.scanline_strength_pct < 0 ? 50 : m->s.scanline_strength_pct;
+    const int key = ((((upscale * 8 + filter) * 4 + smooth) * 8 + kind) * 2 + scan) * 128 + (scan ? pct : 0);
+    LauncherTexture& tex = second ? s_tex2 : s_prev_tex;
+    int& tkey = second ? s_key2 : s_prev_key;
+    if (s_prev_sample && key != tkey) {
+        tkey = key;
+        launcher_texture_free(&tex);
+        unsigned char* colored = recomp_filter_preview_colorize(s_prev_sample, s_prev_sw,
+                                                                s_prev_sh, kind);
         int ow = 0, oh = 0;
         unsigned char* img = recomp_filter_preview_render_ex(
-            s_prev_sample, s_prev_sw, s_prev_sh,
+            colored ? colored : s_prev_sample, s_prev_sw, s_prev_sh,
             RECOMP_FILTER_PREVIEW_CROP_X, RECOMP_FILTER_PREVIEW_CROP_Y,
             RECOMP_FILTER_PREVIEW_CROP_W, RECOMP_FILTER_PREVIEW_CROP_H,
-            4, upscale, filter, 0, 0.0f, smooth, &ow, &oh);
+            4, upscale, filter, scan, pct / 100.0f, smooth, &ow, &oh);
+        if (colored) recomp_filter_preview_free(colored);
         if (img) {
-            s_prev_tex = launcher_texture_from_rgba(img, ow, oh);
+            tex = launcher_texture_from_rgba(img, ow, oh);
             recomp_filter_preview_free(img);
         }
     }
-    if (s_prev_tex.id) {
+    if (tex.id) {
         row_label("Preview", th);
-        ImGui::Image(tid(s_prev_tex), ImVec2((float)s_prev_tex.w, (float)s_prev_tex.h));
+        ImGui::Image(tid(tex), ImVec2((float)tex.w, (float)tex.h));
     }
 }
 

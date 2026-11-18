@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct { float r, g, b; } V3;
 
@@ -216,6 +217,23 @@ unsigned char* recomp_filter_preview_render_ex(const unsigned char* src, int sw,
     }
     if (ow) *ow = w;
     if (oh) *oh = h;
+    return out;
+}
+
+static RecompPreviewColorFn s_color_hook = NULL;
+
+void recomp_filter_preview_set_color_hook(RecompPreviewColorFn fn) {
+    s_color_hook = fn;
+}
+
+unsigned char* recomp_filter_preview_colorize(const unsigned char* rgba, int w, int h,
+                                              int screen_kind) {
+    if (!rgba || w <= 0 || h <= 0 || screen_kind <= 0 || !s_color_hook) return NULL;
+    const size_t n = (size_t)w * (size_t)h * 4u;
+    unsigned char* out = (unsigned char*)malloc(n);
+    if (!out) return NULL;
+    memcpy(out, rgba, n);
+    s_color_hook(screen_kind, out, w * h);
     return out;
 }
 

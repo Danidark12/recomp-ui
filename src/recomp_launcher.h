@@ -811,7 +811,14 @@ struct RecompLauncherCSettings {
      * explicitly disabled. Bindings live in assist_key_bind/assist_pad_bind so
      * they appear in the Controller page with the rest of host-owned binds. */
     int  virtual_stylus;
+
+    /* CRT scanline overlay (OpenGL renderer): on/off and strength in percent
+     * (-1 = unset, host default). Appended additively. */
+    int  scanlines;
+    int  scanline_strength_pct;
 };
+/* Hosts compiled against this header can rely on the two fields above. */
+#define RECOMP_LAUNCHER_HAS_SCANLINES 1
 
 /* Values for RecompLauncherCSettings.vsync (1-based; 0 = unset). */
 #define RECOMP_LAUNCHER_VSYNC_ON       1

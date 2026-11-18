@@ -31,6 +31,17 @@ unsigned char* recomp_filter_preview_render_ex(const unsigned char* src, int sw,
                                                int scanlines, float strength, int smooth,
                                                int* ow, int* oh);
 
+// Screen-model colour hook. The colour simulation (Raw / CRT / Composite /
+// Trinitron) lives in the host runtime; it registers a function that rewrites
+// an RGBA8 buffer in place for a given model. Without a hook the preview keeps
+// the raw colours.
+typedef void (*RecompPreviewColorFn)(int screen_kind, unsigned char* rgba, int pixels);
+void recomp_filter_preview_set_color_hook(RecompPreviewColorFn fn);
+// Copy of the sample with the screen model applied (malloc'd; NULL on failure
+// or when screen_kind is 0 / no hook — then use the original).
+unsigned char* recomp_filter_preview_colorize(const unsigned char* rgba, int w, int h,
+                                              int screen_kind);
+
 // The crop used for the bundled sample (assets/frame_preview_sample.png:
 // Lenneth on Asgard Hill, 320x224).
 #define RECOMP_FILTER_PREVIEW_CROP_X 118
