@@ -219,6 +219,7 @@ LauncherTexture g_cart[5];
 LauncherTexture g_verdict_ok, g_verdict_warn, g_verdict_bad, g_verdict_none;
 ImTextureID tid(const LauncherTexture& t) { return (ImTextureID)(intptr_t)t.id; }
 std::string asset(const char* rel);   // defined near the end of this namespace
+static void draw_filter_preview(LauncherModel* m, const LauncherTheme& th, int upscale, int filter);
 
 LauncherPad g_pads[LNG_MAX_PADS];   // live gamepad list (repolled every frame)
 int         g_pad_count = 0;
@@ -2696,6 +2697,10 @@ ImGui::PopID();
             launcher_model_cycle_aa(m);
         ImGui::PopID();
     }
+    // Prévia de Nearest/Bilinear e da suavização (só OpenGL: no software a
+    // tela sai sempre sem filtro).
+    if (m->s.renderer && (m->has_texture_filter || m->has_antialiasing))
+        draw_filter_preview(m, th, -1, -1);
 
     /* FMV reconstruction. Distinct from Texture filtering above: that samples
      * the rasterizer's textures, this scales a decoded video frame up to the
@@ -2807,37 +2812,9 @@ ImGui::PopID();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
             ImGui::SetTooltip("%s", ui_text("LCD Grid: dark lines between pixels, like a handheld screen. LCD RGB: adds red/green/blue subpixels. CRT: tube mask with scanlines. Soft CRT: light mask only. Dot Matrix: each pixel becomes a round dot. Drawn over the upscaler; works best with a large window or full screen."));
 
-        // Prévia: a combinação atual num recorte ampliado da cena de exemplo.
-        static LauncherTexture s_prev_tex{};
-        static int s_prev_key = -1;
-        static unsigned char* s_prev_sample = nullptr;
-        static int s_prev_sw = 0, s_prev_sh = 0, s_prev_tried = 0;
-        if (!s_prev_tried) {
-            s_prev_tried = 1;
-            s_prev_sample = launcher_image_load_rgba(
-                asset("assets/frame_preview_sample.png").c_str(), &s_prev_sw, &s_prev_sh);
-        }
-        const int key = s_upscale * 16 + s_filter;
-        if (s_prev_sample && key != s_prev_key) {
-            s_prev_key = key;
-            launcher_texture_free(&s_prev_tex);
-            int ow = 0, oh = 0;
-            unsigned char* img = recomp_filter_preview_render(
-                s_prev_sample, s_prev_sw, s_prev_sh,
-                RECOMP_FILTER_PREVIEW_CROP_X, RECOMP_FILTER_PREVIEW_CROP_Y,
-                RECOMP_FILTER_PREVIEW_CROP_W, RECOMP_FILTER_PREVIEW_CROP_H,
-                4, s_upscale, s_filter, 0, 0.0f, &ow, &oh);
-            if (img) {
-                s_prev_tex = launcher_texture_from_rgba(img, ow, oh);
-                recomp_filter_preview_free(img);
-            }
-        }
-        if (s_prev_tex.id) {
-            row_label("Preview", th);
-            ImGui::Image(tid(s_prev_tex), ImVec2((float)s_prev_tex.w, (float)s_prev_tex.h));
-            ImGui::TextColored(col(th.text_muted), "%s",
-                               ui_text("Scanlines, when on, are added on top."));
-        }
+        draw_filter_preview(m, th, s_upscale, s_filter);
+        ImGui::TextColored(col(th.text_muted), "%s",
+                           ui_text("Scanlines, when on, are added on top."));
     }
 
     // Frame interpolation is only meaningful under OpenGL (Software has no
@@ -7783,6 +7760,44 @@ static void draw_mod_catalog_diagnostics(LauncherModel* m,
     }
     ImGui::Separator();
     ImGui::Spacing();
+}
+
+// Prévia da imagem com as opções atuais (filtro de textura / suavização /
+// upscaler / filtro de tela) num recorte ampliado da cena de exemplo.
+static void draw_filter_preview(LauncherModel* m, const LauncherTheme& th,
+                                int upscale, int filter) {
+    static LauncherTexture s_prev_tex{};
+    static int s_prev_key = -1;
+    static unsigned char* s_prev_sample = nullptr;
+    static int s_prev_sw = 0, s_prev_sh = 0, s_prev_tried = 0;
+    if (!s_prev_tried) {
+        s_prev_tried = 1;
+        s_prev_sample = launcher_image_load_rgba(
+            asset("assets/frame_preview_sample.png").c_str(), &s_prev_sw, &s_prev_sh);
+    }
+    if (upscale < 0) upscale = recomp_upscale_filter_load();
+    if (filter < 0) filter = recomp_screen_filter_load();
+    const int smooth = ((m->has_texture_filter && m->s.texture_filter) ? 1 : 0) +
+                       ((m->has_antialiasing && m->s.antialiasing) ? 1 : 0);
+    const int key = upscale * 64 + filter * 4 + smooth;
+    if (s_prev_sample && key != s_prev_key) {
+        s_prev_key = key;
+        launcher_texture_free(&s_prev_tex);
+        int ow = 0, oh = 0;
+        unsigned char* img = recomp_filter_preview_render_ex(
+            s_prev_sample, s_prev_sw, s_prev_sh,
+            RECOMP_FILTER_PREVIEW_CROP_X, RECOMP_FILTER_PREVIEW_CROP_Y,
+            RECOMP_FILTER_PREVIEW_CROP_W, RECOMP_FILTER_PREVIEW_CROP_H,
+            4, upscale, filter, 0, 0.0f, smooth, &ow, &oh);
+        if (img) {
+            s_prev_tex = launcher_texture_from_rgba(img, ow, oh);
+            recomp_filter_preview_free(img);
+        }
+    }
+    if (s_prev_tex.id) {
+        row_label("Preview", th);
+        ImGui::Image(tid(s_prev_tex), ImVec2((float)s_prev_tex.w, (float)s_prev_tex.h));
+    }
 }
 
 // ---- Image resource previews (frame / bezel artwork) -----------------------

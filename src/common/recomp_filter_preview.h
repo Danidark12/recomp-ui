@@ -22,6 +22,15 @@ unsigned char* recomp_filter_preview_render(const unsigned char* src, int sw, in
                                             int* ow, int* oh);
 void recomp_filter_preview_free(unsigned char* pixels);
 
+// Same, plus `smooth`: with no upscaler, 0 samples nearest, 1 bilinear (one of
+// Texture filtering = Bilinear / Screen smoothing on), 2 bilinear plus a light
+// blur (both on). An upscaler, when chosen, replaces this sampling.
+unsigned char* recomp_filter_preview_render_ex(const unsigned char* src, int sw, int sh,
+                                               int cx, int cy, int cw, int ch, int scale,
+                                               int upscale, int filter,
+                                               int scanlines, float strength, int smooth,
+                                               int* ow, int* oh);
+
 // The crop used for the bundled sample (assets/frame_preview_sample.png:
 // Lenneth on Asgard Hill, 320x224).
 #define RECOMP_FILTER_PREVIEW_CROP_X 118

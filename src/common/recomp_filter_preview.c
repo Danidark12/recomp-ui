@@ -25,6 +25,7 @@ static V3 mix3(V3 a, V3 b, float t) {
     V3 v = { a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t };
     return v;
 }
+static V3 add3(V3 a, V3 b) { V3 v = { a.r + b.r, a.g + b.g, a.b + b.b }; return v; }
 static V3 mul3(V3 a, float k) { V3 v = { a.r * k, a.g * k, a.b * k }; return v; }
 static float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
 static float smooth(float e0, float e1, float x) {
@@ -160,11 +161,30 @@ static V3 mask(V3 rgb, float fx, float fy, float sc, int mode, int ox) {
     return mix3(rgb, o, gate);
 }
 
+static V3 bilinear(const Src* s, float gx, float gy) {
+    const float px = gx - 0.5f, py = gy - 0.5f;
+    const int ix = (int)floorf(px), iy = (int)floorf(py);
+    const float wx = px - ix, wy = py - iy;
+    V3 a = tap(s, ix, iy), b = tap(s, ix + 1, iy);
+    V3 c = tap(s, ix, iy + 1), d = tap(s, ix + 1, iy + 1);
+    return mix3(mix3(a, b, wx), mix3(c, d, wx), wy);
+}
+
 unsigned char* recomp_filter_preview_render(const unsigned char* src, int sw, int sh,
                                             int cx, int cy, int cw, int ch, int scale,
                                             int upscale_mode, int filter,
                                             int scanlines, float strength,
                                             int* ow, int* oh) {
+    return recomp_filter_preview_render_ex(src, sw, sh, cx, cy, cw, ch, scale,
+                                           upscale_mode, filter, scanlines, strength,
+                                           0, ow, oh);
+}
+
+unsigned char* recomp_filter_preview_render_ex(const unsigned char* src, int sw, int sh,
+                                               int cx, int cy, int cw, int ch, int scale,
+                                               int upscale_mode, int filter,
+                                               int scanlines, float strength, int smooth,
+                                               int* ow, int* oh) {
     if (!src || sw <= 0 || sh <= 0 || cw <= 0 || ch <= 0 || scale <= 0) return NULL;
     const int w = cw * scale, h = ch * scale;
     unsigned char* out = (unsigned char*)malloc((size_t)w * (size_t)h * 4u);
@@ -176,7 +196,11 @@ unsigned char* recomp_filter_preview_render(const unsigned char* src, int sw, in
             const float gx = cx + (x + 0.5f) / sc, gy = cy + (y + 0.5f) / sc;
             const float fx = gx - floorf(gx), fy = gy - floorf(gy);
             V3 c = upscale_mode > 0 ? upscale(&s, gx, gy, sc, upscale_mode)
-                                    : tap(&s, (int)floorf(gx), (int)floorf(gy));
+                 : smooth >= 2
+                     ? mul3(add3(add3(bilinear(&s, gx - 0.35f, gy - 0.35f), bilinear(&s, gx + 0.35f, gy - 0.35f)),
+                                 add3(bilinear(&s, gx - 0.35f, gy + 0.35f), bilinear(&s, gx + 0.35f, gy + 0.35f))), 0.25f)
+                 : smooth ? bilinear(&s, gx, gy)
+                          : tap(&s, (int)floorf(gx), (int)floorf(gy));
             if (scanlines) {
                 const float gate = clampf(sc - 1.0f, 0.0f, 1.0f);
                 const float beam = sinf(3.14159265f * fy);
