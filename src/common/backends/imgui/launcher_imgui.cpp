@@ -2697,9 +2697,10 @@ ImGui::PopID();
             launcher_model_cycle_aa(m);
         ImGui::PopID();
     }
-    // Prévia de Nearest/Bilinear e da suavização (só OpenGL: no software a
-    // tela sai sempre sem filtro).
-    if (m->s.renderer && (m->has_texture_filter || m->has_antialiasing))
+    // Prévia de Nearest/Bilinear e da suavização. No Software só o
+    // Antialiasing vale (filtro de textura, upscaler e filtro de tela são do
+    // OpenGL), e a prévia mostra exatamente isso.
+    if (m->has_texture_filter || m->has_antialiasing)
         draw_filter_preview(m, th, -1, -1);
 
     /* FMV reconstruction. Distinct from Texture filtering above: that samples
@@ -2770,6 +2771,11 @@ ImGui::PopID();
      * si e com as scanlines. Só no OpenGL. Gravados em screen_filter.txt, o
      * mesmo arquivo que o menu de opções do jogo (F4) usa. Nomes originais em
      * inglês; a prévia mostra a combinação numa cena do jogo. */
+    if (!m->s.renderer) {
+        row_label("Upscaler", th);
+        ImGui::TextColored(col(th.text_muted), "%s",
+            ui_text("Upscaler, Screen filter and Frames need the OpenGL renderer."));
+    }
     if (m->s.renderer) {
         static int s_filter = -1, s_upscale = -1;
         if (s_filter < 0) s_filter = recomp_screen_filter_load();
@@ -7775,9 +7781,11 @@ static void draw_filter_preview(LauncherModel* m, const LauncherTheme& th,
         s_prev_sample = launcher_image_load_rgba(
             asset("assets/frame_preview_sample.png").c_str(), &s_prev_sw, &s_prev_sh);
     }
+    const bool gl = m->s.renderer != 0;
     if (upscale < 0) upscale = recomp_upscale_filter_load();
     if (filter < 0) filter = recomp_screen_filter_load();
-    const int smooth = ((m->has_texture_filter && m->s.texture_filter) ? 1 : 0) +
+    if (!gl) upscale = filter = 0;
+    const int smooth = ((gl && m->has_texture_filter && m->s.texture_filter) ? 1 : 0) +
                        ((m->has_antialiasing && m->s.antialiasing) ? 1 : 0);
     const int key = upscale * 64 + filter * 4 + smooth;
     if (s_prev_sample && key != s_prev_key) {
